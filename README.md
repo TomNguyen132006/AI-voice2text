@@ -160,7 +160,8 @@ _TBD_
 
 ## Credits
 
-- NVIDIA Parakeet TDT 0.6B v3 (CC BY 4.0)
+- Parakeet TDT 0.6B v3 is licensed CC-BY-4.0; credit NVIDIA.
+  Model: [nvidia/parakeet-tdt-0.6b-v3](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3) by NVIDIA.
 
 ## License
 
