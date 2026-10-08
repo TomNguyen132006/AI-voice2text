@@ -21,32 +21,34 @@
   explanation the first time, e.g. "environment variable (biến môi trường)".
 - Code, commands, file names and commit messages stay in English.
 
-### Teaching
-- ONE task at a time. Never do several tasks or a whole story at once. Never move on
-  until Tom says "next".
-- Do-then-report (no hints first). For each task:
+### Workflow (autonomous, report after each task)
+- ONE task at a time, in order, but do NOT wait for "next" between tasks: after a
+  task, write the report, update `PROGRESS.local.md`, then start the next unblocked
+  task automatically.
+- For each task:
   1. Before: one or two lines saying what you are about to do and why.
-  2. Do the task yourself. Exception: steps only Tom can do (create an account, copy
-     an API key from a website, pay) — say exactly what to click and wait for "done".
-  3. After: report in Vietnamese with: what changed (files created/edited, commands
-     run, each command explained), why it works, how Tom can check it (a command
-     or a place to look), and a common mistake to avoid.
-  4. Ask 1-2 questions to check understanding. Wait for the answer. If it is wrong,
-     explain again differently with a simpler example.
-  5. Wait for "next" before starting the next task.
-- When a story is finished, check its "Done when" items one by one with Tom.
-- If something needs Tom (create an account, copy an API key from a website, ask the
-  organizers), say exactly what to do and wait.
+  2. Do the task yourself.
+  3. After: a SHORT report in Vietnamese: what changed (files, commands and what
+     each command does), why it works, how Tom can check it (a command or a place
+     to look), and a common mistake to avoid.
+- No comprehension questions after tasks.
+- STOP and wait for Tom only when:
+  - a step needs Tom (create an account, billing, copy an API key from a website,
+    a decision, asking the team or organizers) — say exactly what to do/click;
+  - something fails or looks risky;
+  - a story is finished — show its "Done when" checklist, checked item by item.
 
 ### Team rules
 - Trunk-based development: small changes, `git pull` often, no new branch unless Tom
   says so (if needed: `feature/Story#_abcxyz`, and tell the team first).
 - Commit format: `Story # | Dev name | Brief explanation`. Tom's dev name is **Tom**.
   Always include story ID and task, e.g. `Story S0-1 T2 | Tom | Create .env`.
-  Show the message and wait for Tom's OK before every commit. Remind Tom to
-  `git pull` before pushing.
-- Security: never put real keys in code or git, never print them. Before each commit,
-  run `git status` and `git diff` and show there are no secrets.
+  Commit and push yourself (no need to wait for Tom's OK), always `git pull`
+  before pushing.
+- Security (repo is PUBLIC): never put real keys in code or git, never print them.
+  Before EVERY commit, run `git status` and `git diff --staged` and check for
+  secrets. If anything looks like a secret or something unexpected is staged, do
+  NOT commit: STOP and tell Tom.
 - Honesty: never invent model IDs, URLs or API behavior. Check official docs or say
   "I don't know".
 
