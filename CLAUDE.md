@@ -49,6 +49,11 @@
   Before EVERY commit, run `git status` and `git diff --staged` and check for
   secrets. If anything looks like a secret or something unexpected is staged, do
   NOT commit: STOP and tell Tom.
+- Money: never run anything that costs money (Nebius AI Cloud, paid API calls beyond
+  what Tom agreed, paid plans) without asking Tom first. Keep model test calls minimal.
+- Installs: before installing anything system-level (WSL2, CUDA, PyTorch, NeMo, ffmpeg),
+  say exactly what will be installed, disk size, admin rights / restart needs, and wait
+  for Tom's OK.
 - Honesty: never invent model IDs, URLs or API behavior. Check official docs or say
   "I don't know".
 
