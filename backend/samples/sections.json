@@ -1,0 +1,4 @@
+[
+  {"id": "sec_01", "title": "Loss and gradient", "start": 0.0, "end": 44.0, "segment_ids": ["seg_0001", "seg_0002", "seg_0003"]},
+  {"id": "sec_02", "title": "Choosing the learning rate", "start": 44.0, "end": 88.0, "segment_ids": ["seg_0004", "seg_0005", "seg_0006"]}
+]

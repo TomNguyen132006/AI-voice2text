@@ -1,0 +1,28 @@
+[
+  {
+    "section_id": "sec_01",
+    "title": "Loss and gradient",
+    "bullets": [
+      {"id": "st_0001", "section_id": "sec_01", "text": "A loss function measures how wrong the model's predictions are.",
+       "sources": [{"type": "lecture", "segment_id": "seg_0002", "start": 12.4, "end": 27.9}]},
+      {"id": "st_0002", "section_id": "sec_01", "text": "Gradient descent moves the parameters in the opposite direction of the gradient to reduce the loss.",
+       "sources": [{"type": "lecture", "segment_id": "seg_0003", "start": 27.9, "end": 44.0},
+                   {"type": "web", "url": "https://en.wikipedia.org/wiki/Gradient_descent", "title": "Gradient descent - Wikipedia"}]}
+    ],
+    "example": "Walking downhill in fog: feel which way the ground slopes and take a step the other way.",
+    "speaker_notes": "Start with the loss, then explain the gradient as a direction."
+  },
+  {
+    "section_id": "sec_02",
+    "title": "Choosing the learning rate",
+    "bullets": [
+      {"id": "st_0003", "section_id": "sec_02", "text": "The learning rate controls the size of each step.",
+       "sources": [{"type": "lecture", "segment_id": "seg_0004", "start": 44.0, "end": 58.6}]},
+      {"id": "st_0004", "section_id": "sec_02", "text": "A learning rate that is too large can make the loss oscillate instead of converging.",
+       "sources": [{"type": "lecture", "segment_id": "seg_0005", "start": 58.6, "end": 73.2},
+                   {"type": "web", "url": "https://en.wikipedia.org/wiki/Learning_rate", "title": "Learning rate - Wikipedia"}]}
+    ],
+    "example": null,
+    "speaker_notes": "Compare too large vs too small with a quick sketch."
+  }
+]

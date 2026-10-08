@@ -1,0 +1,11 @@
+{
+  "id": "job_demo_0001",
+  "status": "done",
+  "stage": "done",
+  "error": null,
+  "outputs": {
+    "txt": "/files/job_demo_0001/transcript.txt",
+    "md": "/files/job_demo_0001/notes.md",
+    "pptx": "/files/job_demo_0001/slides.pptx"
+  }
+}

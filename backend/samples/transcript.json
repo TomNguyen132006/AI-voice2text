@@ -1,0 +1,8 @@
+[
+  {"id": "seg_0001", "start": 0.0, "end": 12.4, "text": "Today we talk about how a model learns: gradient descent."},
+  {"id": "seg_0002", "start": 12.4, "end": 27.9, "text": "The loss function measures how wrong the model's predictions are."},
+  {"id": "seg_0003", "start": 27.9, "end": 44.0, "text": "The gradient tells us which direction makes the loss go up fastest, so we step the other way."},
+  {"id": "seg_0004", "start": 44.0, "end": 58.6, "text": "How big each step is depends on the learning rate."},
+  {"id": "seg_0005", "start": 58.6, "end": 73.2, "text": "If the learning rate is too large, the loss can jump around and never settle."},
+  {"id": "seg_0006", "start": 73.2, "end": 88.0, "text": "If it is too small, training works but takes a very long time."}
+]
