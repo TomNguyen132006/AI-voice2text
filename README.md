@@ -68,7 +68,7 @@ Open http://localhost:3000.
 
 | Step | Model / tool | Where it runs |
 |---|---|---|
-| Speech-to-text with timestamps | NVIDIA Parakeet TDT 0.6B v3 | _TBD (S0-3)_ |
+| Speech-to-text with timestamps | NVIDIA Parakeet TDT 0.6B v3 | _TBD (S0-3): not found on Token Factory (checked Oct 7, 2026); confirm with organizers_ |
 | Clean transcript, split by topic | Nemotron Nano | Nebius Token Factory |
 | Find gaps, write notes and slides | Nemotron Super | Nebius Token Factory |
 | Judge every statement | Nemotron Ultra | Nebius Token Factory |
@@ -84,7 +84,9 @@ Prices are USD per 1M tokens.
 | Super | `nvidia/nemotron-3-super-120b-a12b` | 262,144 | $0.30 | $0.90 |
 | Ultra | `nvidia/Nemotron-3-Ultra-550b-a55b` | 1,048,576 | $1.00 | $3.00 |
 
-Smoke test (`backend/smoke_test.py`, one short prompt, one call per model, Oct 7, 2026):
+Smoke test (`backend/smoke_test.py`, one short prompt, one call per model, Oct 7, 2026).
+Timings are single-call samples (the first call also includes connection warmup),
+not a speed comparison between models:
 
 | Model | Response time | Prompt + completion tokens |
 |---|---|---|
@@ -95,7 +97,7 @@ Smoke test (`backend/smoke_test.py`, one short prompt, one call per model, Oct 7
 Notes:
 - These models produce reasoning tokens before the answer; they count (and are billed) as completion tokens.
 - Re-check IDs and prices with `python backend/list_models.py` (listing models uses no tokens).
-- Parakeet is not in the Token Factory model list (checked Oct 7, 2026); see S0-3.
+- Parakeet: not found in the Token Factory model list or docs index (checked Oct 7, 2026); confirm with organizers.
 
 ## Other Nebius tools used
 
