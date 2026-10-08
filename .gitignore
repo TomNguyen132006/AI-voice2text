@@ -6,8 +6,10 @@ PROGRESS.local.md
 .env.*
 !.env.example
 
-# Python
+# Python (virtual environments)
 .venv/
+venv/
+.venv-*/
 __pycache__/
 *.pyc
 
@@ -17,8 +19,21 @@ __pycache__/
 *.m4a
 *.mp4
 *.webm
+*.flac
 
 # OS / editor / logs
 .DS_Store
 Thumbs.db
 *.log
+
+# Model weights and caches (S0-3 Parakeet; downloaded, never committed)
+*.nemo
+*.ckpt
+*.pt
+*.pth
+*.safetensors
+*.onnx
+models/
+.cache/
+hf_cache/
+nemo_experiments/
