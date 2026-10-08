@@ -10,3 +10,15 @@ PROGRESS.local.md
 .venv/
 __pycache__/
 *.pyc
+
+# Audio/video (lecture clips stay out of git: large + copyright)
+*.mp3
+*.wav
+*.m4a
+*.mp4
+*.webm
+
+# OS / editor / logs
+.DS_Store
+Thumbs.db
+*.log
