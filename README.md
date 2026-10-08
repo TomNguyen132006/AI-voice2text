@@ -99,6 +99,24 @@ Notes:
 - Re-check IDs and prices with `python backend/list_models.py` (listing models uses no tokens).
 - Parakeet: not found in the Token Factory model list or docs index (checked Oct 7, 2026); confirm with organizers.
 
+## How sources work
+
+Every statement in the notes and slides must have a source: a lecture moment or a web page.
+
+- The model never writes start/end times. For a lecture source it only picks a
+  `segment_id` (`LectureSourceDraft` / `StatementDraft` in `backend/schemas.py`).
+- Code fills start/end from the transcript (`fill_lecture_times` in `backend/sources.py`).
+  An unknown `segment_id` is reported, never guessed, so the pipeline can retry once or drop it.
+- `check_source_consistency` re-checks the result (segment exists, times inside the segment).
+
+Run the tests:
+
+```bash
+cd backend
+pip install -r requirements-dev.txt
+python -m pytest tests -q
+```
+
 ## Other Nebius tools used
 
 _TBD_

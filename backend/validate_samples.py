@@ -9,6 +9,7 @@ from pathlib import Path
 from pydantic import TypeAdapter, ValidationError
 
 from schemas import Job, Section, Segment, Slide, Statement
+from sources import check_source_consistency
 
 SAMPLES = Path(__file__).parent / "samples"
 
@@ -44,16 +45,7 @@ if not problems:
                 problems.append(f"section {section.id}: unknown segment {seg_id}")
 
     statements = data["statements.json"] + [b for s in data["slides.json"] for b in s.bullets]
-    for st in statements:
-        if st.section_id not in section_ids:
-            problems.append(f"statement {st.id}: unknown section {st.section_id}")
-        for src in st.sources:
-            if src.type == "lecture":
-                seg = segments.get(src.segment_id)
-                if seg is None:
-                    problems.append(f"statement {st.id}: unknown segment {src.segment_id}")
-                elif not (seg.start <= src.start <= src.end <= seg.end):
-                    problems.append(f"statement {st.id}: time {src.start}-{src.end} outside {seg.id}")
+    problems += check_source_consistency(statements, data["transcript.json"], data["sections.json"])
 
     for slide in data["slides.json"]:
         if slide.section_id not in section_ids:

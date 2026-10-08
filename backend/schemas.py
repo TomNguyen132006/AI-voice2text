@@ -6,6 +6,8 @@ different steps at the same time and they still fit together.
 Conventions:
 - All ids are strings, e.g. "seg_0001", "sec_01", "st_0001".
 - All times are seconds from the start of the recording (float), e.g. 75.5 = 01:15.5.
+- The model never writes start/end for a lecture source. It outputs *Draft types
+  (segment_id only); code fills start/end from the transcript (sources.py).
 
 Changes to this file after Oct 11 must be announced to the team.
 """
@@ -33,8 +35,22 @@ class Section(BaseModel):
     segment_ids: list[str]
 
 
+class LectureSourceDraft(BaseModel):
+    """What the MODEL outputs for a lecture source: only which segment it uses.
+
+    Extra keys the model may add (e.g. its own start/end) are ignored;
+    the real times always come from the transcript.
+    """
+
+    type: Literal["lecture"] = "lecture"
+    segment_id: str
+
+
 class LectureSource(BaseModel):
-    """A statement is supported by a moment in the lecture."""
+    """A statement is supported by a moment in the lecture.
+
+    start/end are copied by code from the transcript segment (never by the model).
+    """
 
     type: Literal["lecture"] = "lecture"
     segment_id: str
@@ -52,6 +68,17 @@ class WebSource(BaseModel):
 
 # A source is EITHER a lecture timestamp OR a web link; "type" tells which one.
 Source = Annotated[Union[LectureSource, WebSource], Field(discriminator="type")]
+SourceDraft = Annotated[Union[LectureSourceDraft, WebSource], Field(discriminator="type")]
+
+
+class StatementDraft(BaseModel):
+    """What the MODEL outputs for one statement (Epic 4); turned into a Statement
+    by sources.fill_lecture_times()."""
+
+    id: str
+    section_id: str
+    text: str
+    sources: list[SourceDraft] = []
 
 
 class Statement(BaseModel):
