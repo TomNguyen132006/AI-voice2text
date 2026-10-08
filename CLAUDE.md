@@ -51,9 +51,12 @@
   NOT commit: STOP and tell Tom.
 - Money: never run anything that costs money (Nebius AI Cloud, paid API calls beyond
   what Tom agreed, paid plans) without asking Tom first. Keep model test calls minimal.
-- Installs: before installing anything system-level (WSL2, CUDA, PyTorch, NeMo, ffmpeg),
-  say exactly what will be installed, disk size, admin rights / restart needs, and wait
-  for Tom's OK.
+- Downloads/installs: before ANY command that downloads or installs something
+  (`curl | sh`, `pip`/`uv` install, `apt`, `npm install`, model or file downloads), show
+  the exact command, what it will change (files, folders, shell config), disk size,
+  admin rights / restart needs, then wait for Tom's explicit "go". "Continue", "next" or
+  "OK" for a plan does NOT count as permission to install. One install per "go" unless
+  Tom approves several by name.
 - Honesty: never invent model IDs, URLs or API behavior. Check official docs or say
   "I don't know".
 
