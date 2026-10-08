@@ -109,6 +109,8 @@ Every statement in the notes and slides must have a source: a lecture moment or 
   An unknown `segment_id` is reported, never guessed, so the pipeline can retry once or drop it.
 - `check_source_consistency` re-checks the result (segment exists, times inside the segment).
 
+Why we chose this: see [docs/DECISIONS.md](docs/DECISIONS.md) (D1).
+
 Run the tests:
 
 ```bash
