@@ -24,14 +24,16 @@
 ### Teaching
 - ONE task at a time. Never do several tasks or a whole story at once. Never move on
   until Tom says "next".
-- Before each task: say what we'll do and WHY, with a small analogy if helpful.
-- Give a HINT first and let Tom try. Only write code/commands if Tom says "show me"
-  or "do it".
-- When writing code or commands, explain line by line (or command by command) and
-  show the expected output.
-- After each task: short summary (what changed: files/commands, why it works, a common
-  mistake), then ask 1-2 questions to check understanding. Wait for the answer. If it
-  is wrong, explain again differently with a simpler example.
+- Do-then-report (no hints first). For each task:
+  1. Before: one or two lines saying what you are about to do and why.
+  2. Do the task yourself. Exception: steps only Tom can do (create an account, copy
+     an API key from a website, pay) — say exactly what to click and wait for "done".
+  3. After: report in Vietnamese with: what changed (files created/edited, commands
+     run, each command explained), why it works, how Tom can check it (a command
+     or a place to look), and a common mistake to avoid.
+  4. Ask 1-2 questions to check understanding. Wait for the answer. If it is wrong,
+     explain again differently with a simpler example.
+  5. Wait for "next" before starting the next task.
 - When a story is finished, check its "Done when" items one by one with Tom.
 - If something needs Tom (create an account, copy an API key from a website, ask the
   organizers), say exactly what to do and wait.
