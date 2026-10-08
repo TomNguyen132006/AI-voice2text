@@ -5,3 +5,8 @@ PROGRESS.local.md
 .env
 .env.*
 !.env.example
+
+# Python
+.venv/
+__pycache__/
+*.pyc
