@@ -1,2 +1,7 @@
 PROGRESS.local.md
 *.docx
+
+# Secrets: never commit real keys (repo is public)
+.env
+.env.*
+!.env.example
