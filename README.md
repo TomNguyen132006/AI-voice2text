@@ -99,6 +99,37 @@ Notes:
 - Re-check IDs and prices with `python backend/list_models.py` (listing models uses no tokens).
 - Parakeet: not found in the Token Factory model list or docs index (checked Oct 7, 2026); confirm with organizers.
 
+## Parakeet local test environment (S0-3)
+
+Tested Oct 8, 2026 on Windows 11 + WSL2 (Ubuntu 26.04), NVIDIA RTX 4060 Laptop (8 GB VRAM).
+Parakeet runs in its own Python 3.12 venv inside WSL (NeMo officially supports Linux).
+
+| Component | Version |
+|---|---|
+| Python | 3.12.15 (installed with uv 0.12.23) |
+| torch | 2.14.1+cu130 (CUDA 13.0, cuDNN 9.24) |
+| nemo-toolkit[asr] | 3.0.0 |
+| transformers | 5.19.0 (pinned `>=4.45`, see note) |
+| tokenizers / huggingface-hub | 0.23.2 / 1.33.0 |
+| ffmpeg (system) | 8.0.1 |
+
+Full pinned list (155 packages): `backend/parakeet/requirements-s03.lock`.
+Disk use: about 6.4 GB for the venv, plus 2.5 GB for the model file.
+
+Reproduce (inside WSL/Ubuntu):
+
+```bash
+sudo apt install -y ffmpeg
+curl -LsSf https://astral.sh/uv/install.sh | sh
+uv python install 3.12
+mkdir -p ~/parakeet-s03 && cd ~/parakeet-s03
+uv venv --python 3.12 .venv
+uv pip install --python .venv/bin/python -r <repo>/backend/parakeet/requirements-s03.lock
+```
+
+Note: without `transformers>=4.45` the resolver picked transformers 4.12.2, whose
+tokenizers 0.10.3 has no Python 3.12 wheel and needs a Rust compiler (install fails).
+
 ## How sources work
 
 Every statement in the notes and slides must have a source: a lecture moment or a web page.
