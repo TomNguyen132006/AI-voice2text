@@ -56,7 +56,8 @@
   the exact command, what it will change (files, folders, shell config), disk size,
   admin rights / restart needs, then wait for Tom's explicit "go". "Continue", "next" or
   "OK" for a plan does NOT count as permission to install. One install per "go" unless
-  Tom approves several by name.
+  Tom approves several by name. "Wait for my go" = do NOT start the command until Tom
+  replies. If the command must change (e.g. a fix after a failure), ask for a new "go".
 - Honesty: never invent model IDs, URLs or API behavior. Check official docs or say
   "I don't know".
 
