@@ -1,1 +1,94 @@
 # AI-voice2text
+
+Turn a lecture recording into trustworthy study materials.
+
+Upload a lecture recording. The app transcribes it with **NVIDIA Parakeet**, uses
+**NVIDIA Nemotron** models on **Nebius Token Factory** to clean it, split it by topic
+and add supporting knowledge from the web, then produces study notes (.md), slides
+(.pptx) and a timestamped transcript (.txt). A judge model checks that every
+statement has a source (a lecture timestamp or a web link) and does not contradict
+the lecture.
+
+Built for the Nebius x NVIDIA Global AI Hackathon (track: Best Apps and Agents).
+
+> Status: early setup (Epic 0). Sections marked _TBD_ are filled in as we build.
+
+## Repo structure
+
+```
+frontend/   Next.js (JavaScript) + Tailwind CSS
+backend/    Python + FastAPI
+```
+
+## Requirements
+
+- Node.js 20.9+ (for Next.js 16)
+- Python 3.12
+- **ffmpeg** (system requirement, used to convert uploaded audio to 16 kHz mono WAV)
+  - macOS: `brew install ffmpeg`
+  - Ubuntu/Debian: `sudo apt install ffmpeg`
+  - Windows: download from https://ffmpeg.org/download.html and add it to `PATH`
+  - Check: `ffmpeg -version`
+- A Nebius Token Factory API key
+
+## Setup
+
+### 1. Environment variables
+
+```bash
+cp .env.example .env
+# then open .env and paste your own key after NEBIUS_API_KEY=
+```
+
+Never commit `.env` (it is in `.gitignore`).
+
+### 2. Backend
+
+```bash
+cd backend
+python -m venv .venv
+# Windows: .venv\Scripts\activate    macOS/Linux: source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn main:app --reload
+```
+
+Open http://127.0.0.1:8000 (API docs at http://127.0.0.1:8000/docs).
+
+### 3. Frontend
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Open http://localhost:3000.
+
+## How we use NVIDIA models and Nebius
+
+| Step | Model / tool | Where it runs |
+|---|---|---|
+| Speech-to-text with timestamps | NVIDIA Parakeet TDT 0.6B v3 | _TBD (S0-3)_ |
+| Clean transcript, split by topic | Nemotron Nano | Nebius Token Factory |
+| Find gaps, write notes and slides | Nemotron Super | Nebius Token Factory |
+| Judge every statement | Nemotron Ultra | Nebius Token Factory |
+
+### Model IDs and limits
+
+_TBD (S0-2): exact model IDs and context limits from the Token Factory catalog._
+
+## Other Nebius tools used
+
+_TBD_
+
+## Feedback on Token Factory, AI Cloud and NVIDIA models
+
+_TBD_
+
+## Credits
+
+- NVIDIA Parakeet TDT 0.6B v3 (CC BY 4.0)
+
+## License
+
+MIT, see [LICENSE](LICENSE).
