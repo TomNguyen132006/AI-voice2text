@@ -102,3 +102,9 @@ class Job(BaseModel):
     stage: JobStage
     error: Optional[str] = None
     outputs: JobOutputs = JobOutputs()
+
+
+class JobResponse(Job):
+    """What GET /jobs/{id} returns: the Job, plus the statements once it is done."""
+
+    statements: list[Statement] = []
