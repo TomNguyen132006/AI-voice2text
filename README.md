@@ -75,7 +75,27 @@ Open http://localhost:3000.
 
 ### Model IDs and limits
 
-_TBD (S0-2): exact model IDs and context limits from the Token Factory catalog._
+From the Token Factory catalog (`GET /v1/models?verbose=true`, checked Oct 7, 2026).
+Prices are USD per 1M tokens.
+
+| Role | Model ID | Context limit (tokens) | Input price | Output price |
+|---|---|---|---|---|
+| Nano | `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` | 262,144 | $0.06 | $0.24 |
+| Super | `nvidia/nemotron-3-super-120b-a12b` | 262,144 | $0.30 | $0.90 |
+| Ultra | `nvidia/Nemotron-3-Ultra-550b-a55b` | 1,048,576 | $1.00 | $3.00 |
+
+Smoke test (`backend/smoke_test.py`, one short prompt, one call per model, Oct 7, 2026):
+
+| Model | Response time | Prompt + completion tokens |
+|---|---|---|
+| Nano | 3,355 ms | 30 + 101 |
+| Super | 1,378 ms | 30 + 65 (35 reasoning) |
+| Ultra | 710 ms | 30 + 30 (16 reasoning) |
+
+Notes:
+- These models produce reasoning tokens before the answer; they count (and are billed) as completion tokens.
+- Re-check IDs and prices with `python backend/list_models.py` (listing models uses no tokens).
+- Parakeet is not in the Token Factory model list (checked Oct 7, 2026); see S0-3.
 
 ## Other Nebius tools used
 
