@@ -162,6 +162,13 @@ _TBD_
 
 - Parakeet TDT 0.6B v3 is licensed CC-BY-4.0; credit NVIDIA.
   Model: [nvidia/parakeet-tdt-0.6b-v3](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3) by NVIDIA.
+- Test lecture (S0-3 and demo): Gilbert Strang. *18.065 Matrix Methods in Data Analysis,
+  Signal Processing, and Machine Learning, Lecture 22: Gradient Descent: Downhill to a
+  Minimum.* Spring 2018. Massachusetts Institute of Technology: MIT OpenCourseWare,
+  [ocw.mit.edu](https://ocw.mit.edu/courses/18-065-matrix-methods-in-data-analysis-signal-processing-and-machine-learning-spring-2018/resources/lecture-22-gradient-descent-downhill-to-a-minimum/).
+  License: [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/).
+  The audio/video is not stored in this repo. Our demo video using this lecture is
+  non-commercial: no ads, no monetization.
 
 ## License
 
