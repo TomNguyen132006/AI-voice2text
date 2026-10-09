@@ -64,6 +64,19 @@ npm run dev
 
 Open http://localhost:3000.
 
+## Deployment (S0-5)
+
+| Part | Host | Settings |
+|---|---|---|
+| Backend | Render, Free instance, US region | Root Directory `backend`; build `pip install -r requirements.txt`; start `uvicorn main:app --host 0.0.0.0 --port $PORT`; health check `/health`; env `PYTHON_VERSION=3.12.6`, `FRONTEND_ORIGINS` |
+| Frontend | Vercel | Root Directory `frontend`; env `NEXT_PUBLIC_API_URL` = backend URL |
+
+`backend/requirements.txt` is the deploy list: no torch / NeMo (Parakeet runs separately, see below).
+
+**The free Render backend sleeps after 15 minutes without requests**; the first request
+after that takes extra time to wake it. Open `<backend URL>/health` and wait for
+`{"status":"ok"}` **before recording the demo video and before submission**.
+
 ## How we use NVIDIA models and Nebius
 
 | Step | Model / tool | Where it runs |
