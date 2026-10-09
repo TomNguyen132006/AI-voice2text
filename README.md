@@ -68,7 +68,7 @@ Open http://localhost:3000.
 
 | Step | Model / tool | Where it runs |
 |---|---|---|
-| Speech-to-text with timestamps | NVIDIA Parakeet TDT 0.6B v3 | _TBD (S0-3): not found on Token Factory (checked Oct 7, 2026); confirm with organizers_ |
+| Speech-to-text with timestamps | NVIDIA Parakeet TDT 0.6B v3 | Tested locally (WSL2 + RTX 4060), see [S0-3 result](#parakeet-test-result-s0-3). Not on Token Factory. Production host: _open question_ |
 | Clean transcript, split by topic | Nemotron Nano | Nebius Token Factory |
 | Find gaps, write notes and slides | Nemotron Super | Nebius Token Factory |
 | Judge every statement | Nemotron Ultra | Nebius Token Factory |
@@ -97,7 +97,7 @@ not a speed comparison between models:
 Notes:
 - These models produce reasoning tokens before the answer; they count (and are billed) as completion tokens.
 - Re-check IDs and prices with `python backend/list_models.py` (listing models uses no tokens).
-- Parakeet: not found in the Token Factory model list or docs index (checked Oct 7, 2026); confirm with organizers.
+- Parakeet: not found in the Token Factory model list or docs index (checked Oct 7, 2026).
 
 ## Parakeet local test environment (S0-3)
 
@@ -129,6 +129,51 @@ uv pip install --python .venv/bin/python -r <repo>/backend/parakeet/requirements
 
 Note: without `transformers>=4.45` the resolver picked transformers 4.12.2, whose
 tokenizers 0.10.3 has no Python 3.12 wheel and needs a Rust compiler (install fails).
+
+## Parakeet test result (S0-3)
+
+Oct 8, 2026. Script: `backend/parakeet/transcribe_s03.py`.
+
+**Where it runs:** locally in WSL2, NVIDIA RTX 4060 Laptop (8 GB VRAM), NeMo 3.0.0.
+Token Factory does not host Parakeet (checked in S0-3 T2).
+
+**Sample:** 10 minutes (599.9 s) of MIT 18.065 Lecture 22 (see Credits), 16 kHz mono WAV.
+One speaker, clear audio.
+
+**Speed and memory:**
+
+| Measure | Result |
+|---|---|
+| Transcribe 10 min of audio | 5.6 s |
+| Model load | 19 s |
+| GPU peak | 5.61 GiB reserved (4.71 GiB allocated) |
+
+A single 10-minute pass ran out of GPU memory: NeMo 3.0 masks the whole input in the
+subsampling step (about 7.9 GB for 10 min). So audio must be **chunked**: about 2 minutes
+per chunk, cut at the quietest point, then add each chunk's start offset to its
+timestamps. This feeds S1-2.
+
+**Accuracy spot-check** (listened by a person):
+
+| Check | Result |
+|---|---|
+| Timestamps A, B, C | 3/3 correct, including C right after a chunk boundary (offset is correct) |
+| "lambda max over lambda min" | Correct |
+| "Hessian" | Recognised, but misspelled "Hesians" once (written correctly elsewhere) |
+| Formula x1² + b·x2² | Parakeet wrote "x1 squared **was** bx2 squared". The audio is ambiguous (sounds like "was"), but the math needs "plus". Ambiguous-audio error: the cleaning step (Nano) must fix it from context |
+
+Timestamps are segment-level (a segment can be 10-15 s long). Word timestamps are
+available from the same model if needed later.
+
+**Decision:** OK, use Parakeet. The errors look fixable by the cleaning step.
+The S1-3 fallback (transcript upload) is not needed.
+
+**Known gaps:**
+- Only one 10-minute sample, one speaker, clear audio. Noisy audio and accents are not tested.
+- The cleaning step must not "fix" things by logic without a source. Keep the lecture
+  timestamp so a person can re-listen.
+- **Not solved:** where Parakeet runs in production. The deployed server will not have
+  a laptop GPU. Needs a decision before the Epic 9 deploy (Nebius AI Cloud GPU or another option).
 
 ## How sources work
 
