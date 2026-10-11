@@ -72,7 +72,15 @@ Open http://localhost:3000.
 | Frontend | Vercel (Hobby). Live: https://ai-voice2text.vercel.app | Root Directory `frontend`; env `NEXT_PUBLIC_API_URL` = backend URL |
 
 Set `NEXT_PUBLIC_API_URL` and `FRONTEND_ORIGINS` **without a trailing `/`** (`.../` + `/health` = `//health` = 404).
-`FRONTEND_ORIGINS` is comma-separated, e.g. `https://ai-voice2text.vercel.app,http://localhost:3000`.
+Where each variable lives (both set, no trailing `/`):
+
+| Variable | Set on | Value |
+|---|---|---|
+| `FRONTEND_ORIGINS` | **Render** (backend) only | `https://ai-voice2text.vercel.app,http://localhost:3000` (comma-separated) |
+| `NEXT_PUBLIC_API_URL` | **Vercel** (frontend) only | `https://ai-voice2text.onrender.com` |
+
+Putting a variable on the wrong host does nothing (the backend never reads Vercel's env).
+After changing `NEXT_PUBLIC_API_URL` on Vercel, redeploy the frontend (`NEXT_PUBLIC_` values are baked in at build time).
 
 `backend/requirements.txt` is the deploy list: no torch / NeMo (Parakeet runs separately, see below).
 
