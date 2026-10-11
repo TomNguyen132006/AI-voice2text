@@ -8,7 +8,9 @@
 - **Stack:** Next.js (JavaScript, no TypeScript) + Tailwind in `frontend/`; Python +
   FastAPI in `backend/`; `openai` Python library (no agent framework); python-pptx;
   Supabase or S3; Vercel + Nebius (fallback Render/Railway). Public repo, MIT license.
-- **Backlog:** `Nebius x NVIDIA Global AI Hackathon.docx` (Epics 0-10).
+- **Backlog:** `context/backlog.md` (copy of `Nebius x NVIDIA Global AI Hackathon.docx`,
+  Epics 0-10). Project overview and key facts: `context/project.md`. Read these instead
+  of the .docx or the full README to save tokens.
 - **Current epic:** Epic 0 — Setup and contracts (due Oct 11), stories S0-1 to S0-8.
   Epic 0 tasks are listed in `PROGRESS.local.md` and in the .docx.
 - **Suggested order:** S0-1 -> S0-4 -> S0-2 and S0-6 -> S0-3 -> S0-7 -> S0-8 -> S0-5.
