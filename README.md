@@ -69,9 +69,10 @@ Open http://localhost:3000.
 | Part | Host | Settings |
 |---|---|---|
 | Backend | Render, Free instance, US region. Live: https://ai-voice2text.onrender.com ([/health](https://ai-voice2text.onrender.com/health)) | Root Directory `backend`; build `pip install -r requirements.txt`; start `uvicorn main:app --host 0.0.0.0 --port $PORT`; health check `/health`; env `PYTHON_VERSION=3.12.6`, `FRONTEND_ORIGINS` |
-| Frontend | Vercel | Root Directory `frontend`; env `NEXT_PUBLIC_API_URL` = backend URL |
+| Frontend | Vercel (Hobby). Live: https://ai-voice2text.vercel.app | Root Directory `frontend`; env `NEXT_PUBLIC_API_URL` = backend URL |
 
 Set `NEXT_PUBLIC_API_URL` and `FRONTEND_ORIGINS` **without a trailing `/`** (`.../` + `/health` = `//health` = 404).
+`FRONTEND_ORIGINS` is comma-separated, e.g. `https://ai-voice2text.vercel.app,http://localhost:3000`.
 
 `backend/requirements.txt` is the deploy list: no torch / NeMo (Parakeet runs separately, see below).
 
