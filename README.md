@@ -199,6 +199,26 @@ The S1-3 fallback (transcript upload) is not needed.
 - **Not solved:** where Parakeet runs in production. The deployed server will not have
   a laptop GPU. Needs a decision before the Epic 9 deploy (Nebius AI Cloud GPU or another option).
 
+## Transcription (S1-1, S1-2)
+
+`backend/transcribe.py` turns a recording into `Segment`s (`{id, start, end, text}`, times in
+seconds from the start of the recording).
+
+1. `audio_prep.py` decodes mp3, m4a, wav or mp4 with ffmpeg to 16 kHz mono and cuts it into
+   ~120 s chunks at the quietest point near each boundary (S0-3: one long pass runs out of GPU memory).
+2. The engine transcribes each chunk; `merge_chunks` adds each chunk's start offset, so
+   timestamps stay correct across cuts.
+
+Engine (`TRANSCRIBE_ENGINE` in `.env`): `local` = Parakeet on an NVIDIA GPU (needs the NeMo env
+above), `fake` = no GPU, placeholder text with real chunk times (for testing the flow).
+
+```bash
+cd backend
+python audio_prep.py lecture.mp3 chunks_out --chunk-sec 60     # only decode + cut, list chunks
+python transcribe.py lecture.mp3 out.json --engine fake         # any machine
+python transcribe.py lecture.mp3 out.json                       # machine with Parakeet
+```
+
 ## How sources work
 
 Every statement in the notes and slides must have a source: a lecture moment or a web page.
