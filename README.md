@@ -234,6 +234,20 @@ turns it into the same `Segment`s:
 python transcript_import.py lecture.srt out.json
 ```
 
+## Job storage (S1-4)
+
+`backend/storage.py` is where every step saves and loads a job's files, under `jobs/{id}/`. The raw
+transcript is saved once per job as `jobs/{id}/transcript.json` (`save_transcript` /
+`load_transcript`), so cleanup and the judge can always compare against the original.
+
+Backend (`STORAGE_BACKEND` in `.env`):
+
+- `local` (default): files in `backend/.data/` (git-ignored). Dev only, because the deployed server
+  loses local files on restart.
+- `s3`: an S3-compatible bucket, planned to be Nebius Object Storage. Set `S3_ENDPOINT_URL`,
+  `S3_REGION`, `S3_BUCKET`, `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`. Needed before the
+  backend deploy (Epic 9).
+
 ## How sources work
 
 Every statement in the notes and slides must have a source: a lecture moment or a web page.

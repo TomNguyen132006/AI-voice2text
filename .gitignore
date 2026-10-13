@@ -38,3 +38,6 @@ models/
 .cache/
 hf_cache/
 nemo_experiments/
+
+# Local job storage (S1-4, STORAGE_BACKEND=local)
+.data/
