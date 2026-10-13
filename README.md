@@ -219,6 +219,21 @@ python transcribe.py lecture.mp3 out.json --engine fake         # any machine
 python transcribe.py lecture.mp3 out.json                       # machine with Parakeet
 ```
 
+### Transcript upload fallback (S1-3)
+
+If Parakeet is not available, users can upload a transcript instead. `backend/transcript_import.py`
+turns it into the same `Segment`s:
+
+- `.srt` / `.vtt`: one segment per cue, with the cue's times.
+- `.txt` with `[mm:ss]` or `[hh:mm:ss]` at the start of lines (our own `.txt` export format): one
+  segment per stamped line.
+- `.txt` without stamps: groups of 1–3 sentences with **estimated** times (~150 words per minute),
+  so 📍 citations point near, not exactly at, the moment in the recording.
+
+```bash
+python transcript_import.py lecture.srt out.json
+```
+
 ## How sources work
 
 Every statement in the notes and slides must have a source: a lecture moment or a web page.
