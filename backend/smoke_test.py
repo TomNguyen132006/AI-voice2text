@@ -17,11 +17,9 @@ sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 load_dotenv()
 
-MODELS = {
-    "nano": "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B",
-    "super": "nvidia/nemotron-3-super-120b-a12b",
-    "ultra": "nvidia/Nemotron-3-Ultra-550b-a55b",
-}
+import llm_config
+
+MODELS = {role: cfg.model_id for role, cfg in llm_config.ROLES.items()}
 PROMPT = "In one short sentence: what does a speech-to-text model do?"
 MAX_TOKENS = 300
 
