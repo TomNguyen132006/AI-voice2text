@@ -210,7 +210,8 @@ seconds from the start of the recording).
    timestamps stay correct across cuts.
 
 Engine (`TRANSCRIBE_ENGINE` in `.env`): `local` = Parakeet on an NVIDIA GPU (needs the NeMo env
-above), `fake` = no GPU, placeholder text with real chunk times (for testing the flow).
+above), `fake` = no GPU, placeholder text with real chunk times (for testing the flow). These are the only valid values
+(`parakeet` is not accepted).
 
 ```bash
 cd backend
