@@ -257,11 +257,16 @@ Code guards revert a segment to the original text when the model adds digits/sym
 (see `jobs/{id}/clean_report.json`). Even so:
 
 - The model can still **guess a wrong word** (seg_0019 "So I'm I just have" became "So I'm just have";
-  seg_0097 "sur graph" became "surface"; seg_0069 "order" became "point"; seg_0062 "What's what direction"
-  became "What's the direction").
+  seg_0097 "sur graph" became "surface"; seg_0062 "What's what direction" became "What's the direction";
+  in the first run seg_0069 "order" was changed to "point", which was a model error: checked by ear,
+  "order" is correct, and the second run correctly left it unchanged).
 - It can **drop a small phrase** that changes the meaning (seg_0010 lost "when one over b is a";
   seg_0042 lost "I take"; seg_0043 lost "of that"; seg_0093 lost the question "what about").
-- It can **leave an ASR error** untouched (seg_0018 "minima").
+- It can **leave an ASR error** untouched. Example: seg_0021. Checked by ear, the speaker said
+  "x star is zero zero of course", but the transcript says "x star, zero", so the ASR dropped words.
+  Cleaning leaves it unchanged on purpose (the `new_symbol` guard reverts "(0,0)"), because words that
+  are missing from the text cannot be verified from the text alone. (seg_0018 "minima" is also correct
+  as spoken, so leaving it unchanged was right.)
 - The judge compares statements with the SAVED transcript (original and cleaned text), so it **cannot
   catch ASR errors**: if Parakeet heard a wrong word, the judge sees the same wrong word. The
   **timestamp** on every statement is what lets a person re-listen and check.
