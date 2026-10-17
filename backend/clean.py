@@ -29,8 +29,9 @@ DEFAULT_WORKERS = 4  # batches are independent, so they can run in parallel
 # Evidence (Oct 17, one Nano call, 5 segments, 304 prompt tokens): 1342 completion tokens, of
 # which about 1100 were thinking text (message.reasoning), about 170 the JSON answer; Nano does
 # not report reasoning_tokens. That is roughly 260 completion tokens per segment, so a batch of
-# 15 needs about 4000. 8000 leaves 2x margin; a truncated batch is retried once with double.
-MAX_TOKENS = 8000
+# 15 needs about 4000. Oct 17 re-run at 8000: 3 of 7 batches were cut off (thinking length
+# varies), so 12000; a truncated batch is still retried once with double.
+MAX_TOKENS = 12000
 
 MIN_RATIO = 0.3  # cleaned text shorter than this share of the original is suspicious
 MAX_RATIO = 1.3  # ... longer than this (plus MAX_EXTRA_CHARS) is invented text
@@ -38,6 +39,7 @@ MAX_EXTRA_CHARS = 10
 SHORT_ORIGINAL = 20  # below this many characters the "too short" check is skipped
 # Cleaning may only remove fillers, fix punctuation/capitalization and swap a misheard word.
 MAX_NEW_WORDS = 2  # words (case-insensitive) in the cleaned text that are not in the original
+MAX_REMOVED_WORDS = 4  # more words than this removed from one segment -> revert (not just fillers)
 NEW_SYMBOL_CHARS = "()[]{}=+-*/<>^_%$#@&|~\\"  # plus any digit; a char the original lacks -> revert
 
 SYSTEM_PROMPT = """You clean speech-to-text transcript segments of a university lecture.
@@ -116,6 +118,8 @@ def _segment_problem(original: str, cleaned: str) -> str | None:
     known = set(_words(original))
     if sum(1 for w in _words(cleaned) if w not in known) > MAX_NEW_WORDS:
         return "new_words"
+    if len(_words(original)) - len(_words(cleaned)) > MAX_REMOVED_WORDS:
+        return "removed_too_much"
     return None
 
 

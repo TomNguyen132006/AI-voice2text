@@ -308,3 +308,19 @@ def test_seg_0021_is_reverted_and_reported_in_a_full_run():
     assert result.segments[0].text == SEG_21
     assert result.segments[1].text == "So we go on."
     assert result.report["reverted_by_reason"] == {"new_symbol": 1}
+
+
+def test_removal_guard_accepts_two_removed_words_and_reverts_six():
+    two = "Well uh so the gradient is zero here."
+    six = "Well so the gradient is zero here and the Hessian is flat."
+    segs = [seg(1, two), seg(2, six)]
+
+    def responder(kwargs, n):
+        return as_json([("seg_0001", "Well, the gradient is zero here."),
+                        ("seg_0002", "Well, the gradient is zero.")])
+
+    result = clean.clean_transcript(segs, job_id="j", client=FakeClient(responder))
+    assert result.segments[0].text == "Well, the gradient is zero here."
+    assert result.segments[1].text == six
+    assert result.report["reverted"] == [{"id": "seg_0002", "reason": "removed_too_much"}]
+    assert result.report["reverted_by_reason"] == {"removed_too_much": 1}

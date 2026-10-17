@@ -249,6 +249,25 @@ Backend (`STORAGE_BACKEND` in `.env`):
   `S3_REGION`, `S3_BUCKET`, `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`. Needed before the
   backend deploy (Epic 9).
 
+## Known limitations of cleaning (S2-2)
+
+`backend/clean.py` (Nano) removes fillers, fixes punctuation and replaces clearly misheard words.
+Code guards revert a segment to the original text when the model adds digits/symbols, adds more than
+2 new words, removes more than 4 words, or returns a text that is empty, much too long or too short
+(see `jobs/{id}/clean_report.json`). Even so:
+
+- The model can still **guess a wrong word** (seg_0019 "So I'm I just have" became "So I'm just have";
+  seg_0097 "sur graph" became "surface"; seg_0069 "order" became "point"; seg_0062 "What's what direction"
+  became "What's the direction").
+- It can **drop a small phrase** that changes the meaning (seg_0010 lost "when one over b is a";
+  seg_0042 lost "I take"; seg_0043 lost "of that"; seg_0093 lost the question "what about").
+- It can **leave an ASR error** untouched (seg_0018 "minima").
+- The judge compares statements with the SAVED transcript (original and cleaned text), so it **cannot
+  catch ASR errors**: if Parakeet heard a wrong word, the judge sees the same wrong word. The
+  **timestamp** on every statement is what lets a person re-listen and check.
+
+Segment ids are from the 10-minute test clip (Oct 17); they change if the audio is re-transcribed.
+
 ## How sources work
 
 Every statement in the notes and slides must have a source: a lecture moment or a web page.
