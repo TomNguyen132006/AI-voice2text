@@ -274,3 +274,37 @@ def test_clean_job_saves_separate_files_and_leaves_original_untouched(tmp_path):
     assert saved == [s.model_dump() for s in result.segments]
     assert load_json(job_key("job_c1", "clean_report.json"), store) == result.report
     assert clean.load_clean_transcript("job_c1", store) == result.segments
+
+
+SEG_21 = "So the minimum point, x star, zero, of course."
+
+
+@pytest.mark.parametrize(
+    "original, cleaned, reason",
+    [
+        (SEG_21, "So the minimum point, x star, is (0,0), of course.", "new_symbol"),
+        ("The answer is two.", "The answer is 2.", "new_symbol"),
+        ("It is a x star here.", "It is a x-star here.", "new_symbol"),
+        ("The cat sat on the mat today.", "The big red furry cat sat on the mat today.", "new_words"),
+        # allowed edits
+        ("The formula was a x squared was b y squared.", "The formula was a x squared plus b y squared.", None),
+        ("So uh the condition number is uh big.", "So the condition number is big.", None),
+        ("so the minimum point x star zero of course", "So, the minimum point, x star, zero, of course.", None),
+        ("So I'm minima, I haven't put it.", "So I'm minimizing, I haven't put it.", None),
+    ],
+)
+def test_guard_new_symbols_and_new_words(original, cleaned, reason):
+    assert clean._segment_problem(original, cleaned) == reason
+
+
+def test_seg_0021_is_reverted_and_reported_in_a_full_run():
+    segs = [seg(1, SEG_21), seg(2, "So uh we go on.")]
+
+    def responder(kwargs, n):
+        return as_json([("seg_0001", "So the minimum point, x star, is (0,0), of course."),
+                        ("seg_0002", "So we go on.")])
+
+    result = clean.clean_transcript(segs, job_id="j", client=FakeClient(responder))
+    assert result.segments[0].text == SEG_21
+    assert result.segments[1].text == "So we go on."
+    assert result.report["reverted_by_reason"] == {"new_symbol": 1}

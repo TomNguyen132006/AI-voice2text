@@ -9,6 +9,7 @@ Files per job (the raw transcript.json is never touched):
     jobs/{id}/clean_report.json       what was reverted and why, tokens, cost
 """
 import json
+import re
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 
@@ -35,12 +36,17 @@ MIN_RATIO = 0.3  # cleaned text shorter than this share of the original is suspi
 MAX_RATIO = 1.3  # ... longer than this (plus MAX_EXTRA_CHARS) is invented text
 MAX_EXTRA_CHARS = 10
 SHORT_ORIGINAL = 20  # below this many characters the "too short" check is skipped
+# Cleaning may only remove fillers, fix punctuation/capitalization and swap a misheard word.
+MAX_NEW_WORDS = 2  # words (case-insensitive) in the cleaned text that are not in the original
+NEW_SYMBOL_CHARS = "()[]{}=+-*/<>^_%$#@&|~\\"  # plus any digit; a char the original lacks -> revert
 
 SYSTEM_PROMPT = """You clean speech-to-text transcript segments of a university lecture.
 For every segment in "segments":
-- Fix words the speech recognizer clearly misheard, but only when the surrounding text makes the right word clear. If you are not sure, keep the text as it is.
-- Remove filler words (uh, um) and stutters or repeated words. Fix punctuation and capitalization.
-- Do NOT summarize, add facts, explain, translate, merge segments or split segments.
+You may make only three kinds of edits:
+1. Remove filler words (uh, um) and stutters or repeated words.
+2. Fix punctuation and capitalization.
+3. Replace a word the speech recognizer clearly misheard with the most plausible similar-sounding word, only when the surrounding text makes it clear. If you are not sure, keep the text as it is.
+Do NOT add words, digits or symbols (such as ( ) = + -) that were not in the original text. Do NOT summarize, add facts, explain, translate, merge segments or split segments.
 "context_before" and "context_after" are neighbouring segments for context only: do NOT return them.
 Reply with ONLY a JSON list, one object per segment in "segments", in the same order:
 [{"id": "<same id>", "text": "<cleaned text>"}]
@@ -103,7 +109,18 @@ def _segment_problem(original: str, cleaned: str) -> str | None:
         return "too_long"
     if len(original) >= SHORT_ORIGINAL and len(cleaned) < MIN_RATIO * len(original):
         return "too_short"
+    original_chars = set(original)
+    for ch in set(cleaned) - original_chars:
+        if ch.isdigit() or ch in NEW_SYMBOL_CHARS:
+            return "new_symbol"
+    known = set(_words(original))
+    if sum(1 for w in _words(cleaned) if w not in known) > MAX_NEW_WORDS:
+        return "new_words"
     return None
+
+
+def _words(text: str) -> list[str]:
+    return re.findall(r"[\w']+", text.lower())
 
 
 def _clean_batch(batch, before, after, job_id, client) -> dict:
