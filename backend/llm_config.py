@@ -15,6 +15,8 @@ API_KEY_ENV = "NEBIUS_API_KEY"
 
 DEFAULT_TIMEOUT_SEC = 120.0
 MAX_RETRIES = 3  # retries after the first call, so up to 4 calls in total
+RETRY_BACKOFF_BASE_SEC = 1.0  # wait 1 s, 2 s, 4 s when the server sends no Retry-After
+RETRY_AFTER_CAP_SEC = 30.0  # never wait longer than this, even if Retry-After says so
 
 # Date (YYYY-MM-DD) when IDs, context limits and prices below were last compared
 # with GET /v1/models?verbose=true.
