@@ -260,3 +260,51 @@ def test_log_write_failure_does_not_break_the_call(monkeypatch, tmp_path):
     blocker.write_text("x")
     monkeypatch.setenv("LLM_LOG_PATH", str(blocker / "sub" / "calls.jsonl"))
     assert run(FakeClient([make_response()])).text == "hello"
+
+
+# ---------- log summary ----------
+
+def write_log(path, rows):
+    path.write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
+
+
+def test_summary_counts_statuses_and_sums_known_costs(isolated):
+    write_log(isolated.log, [
+        {"status": "ok", "est_cost_usd": 0.001},
+        {"status": "ok", "est_cost_usd": 0.002},
+        {"status": "truncated", "est_cost_usd": 0.0005},
+    ])
+    summary = llm.summarize_log()
+
+    assert summary["total_calls"] == 3
+    assert summary["by_status"] == {"ok": 2, "truncated": 1}
+    assert summary["total_est_cost_usd"] == pytest.approx(0.0035)
+    assert summary["unknown_cost_attempts"] == 0
+    assert summary["cost_is_lower_bound"] is False
+    assert "lower bound" not in llm.format_summary(summary)
+
+
+def test_summary_treats_null_cost_as_unknown_not_zero(isolated):
+    write_log(isolated.log, [
+        {"status": "ok", "est_cost_usd": 0.001},
+        {"status": "http_500", "est_cost_usd": None},
+        {"status": "timeout", "est_cost_usd": None},
+    ])
+    summary = llm.summarize_log()
+
+    assert summary["total_est_cost_usd"] == pytest.approx(0.001)
+    assert summary["unknown_cost_attempts"] == 2
+    assert summary["cost_is_lower_bound"] is True
+    text = llm.format_summary(summary)
+    assert "lower bound" in text and "2 attempt(s) with unknown cost" in text
+
+
+def test_summary_of_missing_log_is_empty(isolated):
+    summary = llm.summarize_log()
+    assert summary["total_calls"] == 0 and summary["total_est_cost_usd"] == 0.0
+
+
+def test_summary_skips_damaged_lines(isolated):
+    isolated.log.write_text('{"status": "ok", "est_cost_usd": 0.1}\nnot json\n', encoding="utf-8")
+    summary = llm.summarize_log()
+    assert summary["total_calls"] == 1 and summary["damaged_lines"] == 1

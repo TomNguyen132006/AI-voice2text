@@ -195,3 +195,47 @@ def call_model(
             role=role,
             model_id=cfg.model_id,
         )
+
+
+def summarize_log(path: Path | None = None) -> dict:
+    """Totals over a call log. A null est_cost_usd is UNKNOWN, never counted as zero."""
+    by_status: dict[str, int] = {}
+    total_cost = 0.0
+    unknown = damaged = calls = 0
+    path = path or log_path()
+    if path.is_file():
+        for raw in path.read_text(encoding="utf-8").splitlines():
+            try:
+                row = json.loads(raw)
+            except json.JSONDecodeError:
+                damaged += 1
+                continue
+            calls += 1
+            by_status[row["status"]] = by_status.get(row["status"], 0) + 1
+            if row.get("est_cost_usd") is None:
+                unknown += 1
+            else:
+                total_cost += row["est_cost_usd"]
+    return {
+        "total_calls": calls,
+        "by_status": by_status,
+        "total_est_cost_usd": total_cost,
+        "unknown_cost_attempts": unknown,
+        "cost_is_lower_bound": unknown > 0,
+        "damaged_lines": damaged,
+    }
+
+
+def format_summary(summary: dict) -> str:
+    statuses = ", ".join(f"{k}={v}" for k, v in sorted(summary["by_status"].items())) or "none"
+    lines = [
+        f"calls: {summary['total_calls']} ({statuses})",
+        f"estimated cost: ${summary['total_est_cost_usd']:.6f}",
+    ]
+    if summary["cost_is_lower_bound"]:
+        lines[1] += (
+            f"  (lower bound: {summary['unknown_cost_attempts']} attempt(s) with unknown cost)"
+        )
+    if summary["damaged_lines"]:
+        lines.append(f"damaged log lines skipped: {summary['damaged_lines']}")
+    return "\n".join(lines)
