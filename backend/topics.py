@@ -30,6 +30,15 @@ FALLBACK_PART_SEC = 300.0  # equal time parts when the model's answer is unusabl
 MIN_SECTION_SEC = 60.0  # a shorter section is merged into its neighbour (see merge_short)
 MAX_SECTION_SEC = 720.0  # a longer section is only flagged in the report, not changed
 
+# Long lectures (S2-4): ask per window, then join. Windows are used when the lecture is longer than
+# WINDOW_SEC * WINDOW_TRIGGER_FACTOR or the estimated input is bigger than MAX_INPUT_TOKENS.
+WINDOW_SEC = 900.0
+OVERLAP_SEC = 120.0
+WINDOW_TRIGGER_FACTOR = 1.5
+MAX_INPUT_TOKENS = 120_000
+TOKENS_PER_CHAR = 0.36  # measured Oct 17: 4358 real prompt tokens for 12053 characters
+MIN_BOUNDARY_GAP = 3  # boundaries closer than this many segments count as one
+
 SYSTEM_PROMPT = """You split a university lecture transcript into topics (sections).
 The user message is JSON: "duration_sec" is the length of the lecture in seconds and "segments" is the
 whole lecture in order, as [{"id", "start", "text"}] where "start" is the segment start time in seconds.
@@ -135,27 +144,33 @@ def _flagged(sections: list[Section]) -> list[dict]:
     return out
 
 
-def split_topics(segments: list[Segment], *, job_id: str, client=None) -> TopicResult:
-    report = {
+def _user_message(segments: list[Segment]) -> str:
+    return json.dumps(
+        {
+            "duration_sec": round(segments[-1].end, 1),
+            "segments": [{"id": s.id, "start": round(s.start, 1), "text": s.text} for s in segments],
+        },
+        ensure_ascii=False,
+    )
+
+
+def _new_report(job_id: str, total: int) -> dict:
+    return {
         "job_id": job_id, "model_id": llm_config.get_role(ROLE).model_id,
-        "total_segments": len(segments), "used_fallback": False, "fallback_reason": None,
+        "total_segments": total, "used_fallback": False, "fallback_reason": None,
         "calls": 0, "prompt_tokens": 0, "completion_tokens": 0,
         "est_cost_usd": 0.0, "cost_is_lower_bound": False,
     }
-    if not segments:
-        report.update(section_count=0, merged_short=[], flagged=[])
-        return TopicResult([], report)
 
-    client = client or llm.make_client()
+
+def _ask_model(segments: list[Segment], *, job_id: str, client, report: dict):
+    """One topic-split question for these segments. Returns (cuts, None) or (None, reason).
+    Usage is added to report."""
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": json.dumps(
-            {
-                "duration_sec": round(segments[-1].end, 1),
-                "segments": [{"id": s.id, "start": round(s.start, 1), "text": s.text} for s in segments],
-            }, ensure_ascii=False)},
+        {"role": "user", "content": _user_message(segments)},
     ]
-    max_tokens, cuts, reason = MAX_TOKENS, None, None
+    max_tokens, reason = MAX_TOKENS, None
     for attempt in (1, 2):
         try:
             result = llm.call_model(
@@ -165,8 +180,7 @@ def split_topics(segments: list[Segment], *, job_id: str, client=None) -> TopicR
         except llm.LLMError as error:
             report["calls"] += error.attempts
             report["cost_is_lower_bound"] = True  # failed attempts may or may not have been billed
-            reason = "llm_error"
-            break
+            return None, "llm_error"
         report["calls"] += result.attempts
         report["prompt_tokens"] += result.prompt_tokens or 0
         report["completion_tokens"] += result.completion_tokens or 0
@@ -180,9 +194,7 @@ def split_topics(segments: list[Segment], *, job_id: str, client=None) -> TopicR
             max_tokens *= 2
         else:
             try:
-                cuts = _check_reply(_parse_reply(result.text), segments)
-                reason = None
-                break
+                return _check_reply(_parse_reply(result.text), segments), None
             except ValueError as error:
                 reason, detail = "invalid_reply", str(error)
         if attempt == 1:
@@ -190,13 +202,114 @@ def split_topics(segments: list[Segment], *, job_id: str, client=None) -> TopicR
                 "role": "user",
                 "content": f"Your previous answer was rejected: {detail}. Reply again with ONLY the JSON list.",
             }]
+    return None, reason
 
-    if cuts is None:
-        cuts = fallback_cuts(segments)
-        report.update(used_fallback=True, fallback_reason=reason)
-    merges = []
-    if not report["used_fallback"]:
+
+def needs_windows(segments: list[Segment]) -> bool:
+    if not segments:
+        return False
+    too_long = segments[-1].end - segments[0].start > WINDOW_SEC * WINDOW_TRIGGER_FACTOR
+    too_big = len(_user_message(segments)) * TOKENS_PER_CHAR > MAX_INPUT_TOKENS
+    return too_long or too_big
+
+
+def make_windows(segments: list[Segment]) -> list[tuple[int, int]]:
+    """[(first index, last index + 1)]: windows of about WINDOW_SEC, each starting WINDOW_SEC - OVERLAP_SEC
+    after the previous one, cut on segment boundaries; the last window reaches the last segment."""
+    step = WINDOW_SEC - OVERLAP_SEC
+    t0, windows = segments[0].start, []
+    first = 0
+    while True:
+        last = first
+        while last < len(segments) and segments[last].start < t0 + WINDOW_SEC:
+            last += 1
+        windows.append((first, last))
+        if last >= len(segments):
+            return windows
+        t0 += step
+        first = next(i for i, s in enumerate(segments) if s.start >= t0)
+
+
+def _windowed_cuts(segments: list[Segment], *, job_id: str, client, report: dict) -> list[tuple[str, int]]:
+    """Run the split per window and join the answers.
+
+    Window k (k > 0) starts at t0_k and overlaps window k-1 until t0_k + OVERLAP_SEC. The seam is the
+    middle of the overlap: boundaries before it come from the earlier window, boundaries after it from
+    the later window. Each window's first cut is only the window start, never a boundary.
+    Boundaries fewer than MIN_BOUNDARY_GAP segments apart count as one (the earlier one is kept).
+    """
+    windows = make_windows(segments)
+    seams = [segments[w[0]].start + OVERLAP_SEC / 2 for w in windows[1:]]
+    info, boundaries = [], []
+    for k, (first, last) in enumerate(windows):
+        part = segments[first:last]
+        wr = _new_report(job_id, len(part))
+        cuts, reason = _ask_model(part, job_id=job_id, client=client, report=wr)
+        for key in ("calls", "prompt_tokens", "completion_tokens", "est_cost_usd"):
+            report[key] += wr[key]
+        report["cost_is_lower_bound"] |= wr["cost_is_lower_bound"]
+        entry = {"window": k, "start": round(part[0].start, 1), "end": round(part[-1].end, 1),
+                 "segments": len(part), "used_fallback": cuts is None, "fallback_reason": reason}
+        if cuts is None:
+            cuts = fallback_cuts(part)
+            report["used_fallback"], report["fallback_reason"] = True, "window"
+        lo = segments[0].start if k == 0 else seams[k - 1]
+        hi = seams[k] if k < len(seams) else float("inf")
+        kept, dropped = [], []
+        for title, i in cuts:
+            at = first + i
+            if k > 0 and i == 0:
+                continue  # the window start is not a topic boundary
+            (kept if lo <= segments[at].start < hi else dropped).append((title, at))
+        entry.update(
+            range=[round(lo, 1), None if hi == float("inf") else round(hi, 1)],
+            boundaries_kept=[(t, segments[i].id, round(segments[i].start, 1)) for t, i in kept],
+            boundaries_outside_range=[(segments[i].id, round(segments[i].start, 1)) for _, i in dropped],
+        )
+        info.append(entry)
+        boundaries.extend(kept)
+    boundaries.sort(key=lambda b: b[1])
+    merged: list[tuple[str, int]] = []
+    collapsed = []
+    for title, at in boundaries:
+        if merged and at - merged[-1][1] < MIN_BOUNDARY_GAP:
+            collapsed.append({"dropped": segments[at].id, "kept": segments[merged[-1][1]].id})
+            continue
+        merged.append((title, at))
+    if not merged or merged[0][1] != 0:
+        merged.insert(0, ("Part 1", 0))  # cannot happen when window 0 answered; keeps the validator happy
+    # fallback sections are called "Part N" per window; give them one running number
+    out, part_numbers = [], 0
+    for title, at in merged:
+        if title.startswith("Part "):
+            part_numbers += 1
+            title = f"Part {part_numbers}"
+        out.append((title, at))
+    report["windows"] = info
+    report["windows_count"] = len(windows)
+    report["seam_collapsed"] = collapsed
+    return out
+
+
+def split_topics(segments: list[Segment], *, job_id: str, client=None) -> TopicResult:
+    report = _new_report(job_id, len(segments))
+    if not segments:
+        report.update(section_count=0, merged_short=[], flagged=[], windows_count=0)
+        return TopicResult([], report)
+
+    client = client or llm.make_client()
+    merges: list[dict] = []
+    if needs_windows(segments):
+        cuts = _windowed_cuts(segments, job_id=job_id, client=client, report=report)
         cuts, merges = merge_short(segments, cuts)
+    else:
+        report["windows_count"] = 1
+        cuts, reason = _ask_model(segments, job_id=job_id, client=client, report=report)
+        if cuts is None:
+            cuts = fallback_cuts(segments)
+            report.update(used_fallback=True, fallback_reason=reason)
+        else:
+            cuts, merges = merge_short(segments, cuts)
     sections = build_sections(segments, cuts)
     report.update(section_count=len(sections), merged_short=merges, flagged=_flagged(sections))
     return TopicResult(sections, report)

@@ -211,3 +211,101 @@ def test_split_job_reads_clean_transcript_and_saves_two_files(tmp_path):
     assert topics.load_sections("job_t2", st) == r.sections
     saved = json.loads(st.load_bytes(job_key("job_t2", "topics_report.json")))
     assert saved["section_count"] == 2
+
+
+# ---------- windows for long lectures (S2-4 T3) ----------
+# 15 segments of 10 s (150 s). WINDOW 120 s / OVERLAP 40 s / factor 1.0 -> two windows:
+#   window 0 = seg 0..11, window 1 = seg 8..14, seam at 80 + 20 = 100 s (seg 10 and later come from window 1).
+
+@pytest.fixture
+def windows_on(monkeypatch):
+    monkeypatch.setattr(topics, "WINDOW_SEC", 120.0)
+    monkeypatch.setattr(topics, "OVERLAP_SEC", 40.0)
+    monkeypatch.setattr(topics, "WINDOW_TRIGGER_FACTOR", 1.0)
+    monkeypatch.setattr(topics, "MIN_SECTION_SEC", 0.0)
+
+
+def window_responder(answers):
+    """answers: {first segment id of the window: reply text}"""
+    def responder(kwargs, n):
+        first = json.loads(kwargs["messages"][1]["content"])["segments"][0]["id"]
+        return answers[first]
+    return responder
+
+
+def ids_of(sections):
+    return [x.segment_ids[0] for x in sections]
+
+
+@pytest.fixture(autouse=True)
+def no_windows_by_default(monkeypatch):
+    monkeypatch.setattr(topics, "WINDOW_SEC", 1e9)
+
+
+def test_windows_are_cut_on_segment_boundaries_and_overlap(windows_on):
+    assert topics.make_windows(segs(15, step=10.0)) == [(0, 12), (8, 15)]
+    assert topics.needs_windows(segs(15, step=10.0)) and not topics.needs_windows(segs(10, step=10.0))
+
+
+def test_seam_boundaries_come_from_the_correct_window(windows_on):
+    answers = {
+        "seg_0000": cuts_json(("W0a", "seg_0000"), ("W0b", "seg_0004"), ("W0c", "seg_0007"), ("OLD11", "seg_0011")),
+        "seg_0008": cuts_json(("SKIP", "seg_0008"), ("TOOEARLY", "seg_0009"), ("NEW11", "seg_0011"), ("W1b", "seg_0014")),
+    }
+    r = run(segs(15, step=10.0), window_responder(answers))
+    assert [x.title for x in r.sections] == ["W0a", "W0b", "W0c", "NEW11", "W1b"]
+    assert ids_of(r.sections) == ["seg_0000", "seg_0004", "seg_0007", "seg_0011", "seg_0014"]
+    assert r.report["windows_count"] == 2 and r.report["calls"] == 2
+    assert r.report["windows"][0]["boundaries_outside_range"] == [("seg_0011", 110.0)]
+
+
+def test_boundaries_closer_than_three_segments_collapse_to_the_earlier_one(windows_on):
+    answers = {
+        "seg_0000": cuts_json(("W0a", "seg_0000"), ("EARLY", "seg_0009")),
+        "seg_0008": cuts_json(("SKIP", "seg_0008"), ("LATE", "seg_0010")),
+    }
+    r = run(segs(15, step=10.0), window_responder(answers))
+    assert [x.title for x in r.sections] == ["W0a", "EARLY"]
+    assert r.report["seam_collapsed"] == [{"dropped": "seg_0010", "kept": "seg_0009"}]
+
+
+def test_bad_window_falls_back_to_parts_for_that_window_only(windows_on, monkeypatch):
+    monkeypatch.setattr(topics, "FALLBACK_PART_SEC", 30.0)
+    answers = {
+        "seg_0000": cuts_json(("W0a", "seg_0000"), ("W0b", "seg_0005")),
+        "seg_0008": "nope",
+    }
+    r = run(segs(15, step=10.0), window_responder(answers))
+    assert [x.title for x in r.sections] == ["W0a", "W0b", "Part 1", "Part 2"]
+    assert [w["used_fallback"] for w in r.report["windows"]] == [False, True]
+    assert r.report["windows"][1]["fallback_reason"] == "invalid_reply"
+    assert r.report["used_fallback"] and r.report["fallback_reason"] == "window"
+
+
+@pytest.mark.parametrize("seed", range(40))
+def test_windowed_sections_cover_every_segment_exactly_once(seed, monkeypatch):
+    import random
+
+    rnd = random.Random(seed)
+    n = rnd.randint(1, 80)
+    step = rnd.choice([3.0, 10.0, 25.0])
+    monkeypatch.setattr(topics, "WINDOW_SEC", rnd.choice([60.0, 120.0, 300.0]))
+    monkeypatch.setattr(topics, "OVERLAP_SEC", rnd.choice([0.0, 20.0, 40.0]))
+    monkeypatch.setattr(topics, "WINDOW_TRIGGER_FACTOR", 1.0)
+    monkeypatch.setattr(topics, "MIN_SECTION_SEC", rnd.choice([0.0, 30.0, 90.0]))
+    s = segs(n, step=step)
+
+    def responder(kwargs, call):
+        got = json.loads(kwargs["messages"][1]["content"])["segments"]
+        picks = {0, *rnd.sample(range(len(got)), k=rnd.randint(0, len(got) - 1))}
+        if rnd.random() < 0.15:
+            return "garbage"
+        return cuts_json(*[(f"T{i}", got[i]["id"]) for i in sorted(picks)])
+
+    r = run(s, responder)
+    assert [i for x in r.sections for i in x.segment_ids] == [x.id for x in s]
+    assert r.sections[0].segment_ids[0] == s[0].id
+    for a, b in zip(r.sections, r.sections[1:]):
+        assert a.end == b.start
+    assert r.sections[0].start == s[0].start and r.sections[-1].end == s[-1].end
+    assert len({x.id for x in r.sections}) == len(r.sections)
