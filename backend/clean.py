@@ -7,6 +7,8 @@ that fails a check is replaced by the ORIGINAL text and counted in the clean rep
 Files per job (the raw transcript.json is never touched):
     jobs/{id}/transcript_clean.json   list of Segment (same shape as transcript.json)
     jobs/{id}/clean_report.json       what was reverted and why, tokens, cost
+    jobs/{id}/clean_batches/batch_NNNN.json   checkpoint of every batch the model answered; a rerun
+                                              reuses these and only calls the missing batches
 """
 import json
 import re
@@ -30,8 +32,9 @@ DEFAULT_WORKERS = 4  # batches are independent, so they can run in parallel
 # which about 1100 were thinking text (message.reasoning), about 170 the JSON answer; Nano does
 # not report reasoning_tokens. That is roughly 260 completion tokens per segment, so a batch of
 # 15 needs about 4000. Oct 17 re-run at 8000: 3 of 7 batches were cut off (thinking length
-# varies), so 12000; a truncated batch is still retried once with double.
-MAX_TOKENS = 12000
+# varies), so 12000; at 12000 3 of 7 were still cut, so 20000. A truncated batch is still retried
+# once with double.
+MAX_TOKENS = 20000
 
 MIN_RATIO = 0.3  # cleaned text shorter than this share of the original is suspicious
 MAX_RATIO = 1.3  # ... longer than this (plus MAX_EXTRA_CHARS) is invented text
@@ -186,11 +189,35 @@ def _clean_batch(batch, before, after, job_id, client) -> dict:
     return out
 
 
+class _StorageCheckpoint:
+    """One small JSON file per answered batch. A file is used only if its ids equal the batch's ids."""
+
+    def __init__(self, job_id: str, storage=None):
+        self.job_id, self.storage = job_id, storage
+
+    def _key(self, n: int) -> str:
+        return job_key(self.job_id, f"clean_batches/batch_{n:04d}.json")
+
+    def get(self, n: int, ids: list[str]) -> dict | None:
+        try:
+            saved = load_json(self._key(n), self.storage)
+        except (FileNotFoundError, ValueError):
+            return None
+        if saved.get("ids") != ids or not isinstance(saved.get("outcome", {}).get("texts"), dict):
+            return None
+        return saved["outcome"]
+
+    def put(self, n: int, ids: list[str], outcome: dict) -> None:
+        save_json(self._key(n), {"ids": ids, "outcome": outcome}, self.storage)
+
+
 def clean_transcript(
-    segments: list[Segment], *, job_id: str, client=None, max_workers: int = DEFAULT_WORKERS
+    segments: list[Segment], *, job_id: str, client=None, max_workers: int = DEFAULT_WORKERS,
+    checkpoint=None,
 ) -> CleanResult:
     batches = make_batches(segments)
     client = client or (llm.make_client() if batches else None)
+    resumed = 0
     position = 0
     jobs = []
     for batch in batches:
@@ -199,14 +226,26 @@ def clean_transcript(
         jobs.append((batch, before, after))
         position += len(batch)
 
-    def work(item):
-        return _clean_batch(*item, job_id, client)
+    def work(numbered):
+        nonlocal resumed
+        n, (batch, before, after) = numbered
+        ids = [s.id for s in batch]
+        saved = checkpoint.get(n, ids) if checkpoint else None
+        if saved is not None:
+            resumed += 1
+            return saved
+        outcome = _clean_batch(batch, before, after, job_id, client)
+        if checkpoint and outcome["texts"] is not None:  # failed batches are retried on a rerun
+            checkpoint.put(n, ids, outcome)
+        return outcome
+
+    numbered_jobs = list(enumerate(jobs))
 
     if max_workers <= 1:
-        outcomes = [work(j) for j in jobs]
+        outcomes = [work(j) for j in numbered_jobs]
     else:
         with ThreadPoolExecutor(max_workers=max_workers) as pool:
-            outcomes = list(pool.map(work, jobs))
+            outcomes = list(pool.map(work, numbered_jobs))
 
     cleaned: list[Segment] = []
     reverted: list[dict] = []
@@ -231,6 +270,7 @@ def clean_transcript(
         "model_id": llm_config.get_role(ROLE).model_id,
         "total_segments": len(segments),
         "batches": len(batches),
+        "resumed_batches": resumed,
         "changed_count": changed,
         "unchanged_count": len(segments) - changed,
         "reverted_count": len(reverted),
@@ -248,7 +288,8 @@ def clean_transcript(
 def clean_job(job_id: str, storage=None, client=None, max_workers: int = DEFAULT_WORKERS) -> CleanResult:
     """Load jobs/{id}/transcript.json, clean it, save the two new files, return the result."""
     result = clean_transcript(
-        load_transcript(job_id, storage), job_id=job_id, client=client, max_workers=max_workers
+        load_transcript(job_id, storage), job_id=job_id, client=client, max_workers=max_workers,
+        checkpoint=_StorageCheckpoint(job_id, storage),
     )
     save_json(job_key(job_id, "transcript_clean.json"), [s.model_dump() for s in result.segments], storage)
     save_json(job_key(job_id, "clean_report.json"), result.report, storage)

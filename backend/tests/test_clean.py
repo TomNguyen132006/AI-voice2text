@@ -324,3 +324,44 @@ def test_removal_guard_accepts_two_removed_words_and_reverts_six():
     assert result.segments[1].text == six
     assert result.report["reverted"] == [{"id": "seg_0002", "reason": "removed_too_much"}]
     assert result.report["reverted_by_reason"] == {"removed_too_much": 1}
+
+
+# ---------- checkpoint and resume (S2-4 T2) ----------
+
+def test_failed_batch_is_not_paid_again_on_rerun(tmp_path):
+    store = LocalStorage(tmp_path)
+    segments = [seg(i) for i in range(1, 46)]  # 45 segments = 3 batches of 15
+    save_transcript("job_c2", segments, store)
+    assert len(clean.make_batches(segments)) == 3
+
+    def fails_on_batch_3(kwargs, n):
+        ids = [s["id"] for s in payload_of(kwargs)["segments"]]
+        if "seg_0031" in ids:  # third batch
+            raise openai.BadRequestError(
+                "bad", response=httpx.Response(400, request=REQUEST), body=None
+            )
+        return clean_all(kwargs, n)
+
+    first = FakeClient(fails_on_batch_3)
+    r1 = clean.clean_job("job_c2", storage=store, client=first, max_workers=1)
+    assert r1.report["reverted_by_reason"] == {"llm_error": 15}
+    assert len(first.calls) == 3
+    assert load_json(job_key("job_c2", "clean_batches/batch_0000.json"), store)["ids"][0] == "seg_0001"
+
+    second = FakeClient(clean_all)
+    r2 = clean.clean_job("job_c2", storage=store, client=second, max_workers=1)
+    assert len(second.calls) == 1  # only the missing third batch
+    assert "seg_0031" in [s["id"] for s in payload_of(second.calls[0])["segments"]]
+    assert r2.report["resumed_batches"] == 2 and r2.report["reverted_count"] == 0
+    assert [s.text for s in r2.segments] == [s.text.replace("uh ", "") for s in segments]
+
+
+def test_checkpoint_from_other_segments_is_ignored(tmp_path):
+    store = LocalStorage(tmp_path)
+    save_transcript("job_c3", [seg(1), seg(2)], store)
+    clean.clean_job("job_c3", storage=store, client=FakeClient(clean_all))
+    changed = [seg(1), seg(3)]  # same batch number, different ids
+    save_transcript("job_c3", changed, store)
+    client = FakeClient(clean_all)
+    clean.clean_job("job_c3", storage=store, client=client)
+    assert len(client.calls) == 1
