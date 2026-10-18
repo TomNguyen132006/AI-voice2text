@@ -171,8 +171,29 @@ def test_after_merging_every_segment_is_covered_exactly_once(seed):
         assert all(x.end - x.start >= topics.MIN_SECTION_SEC for x in r.sections)
 
 
-def test_prompt_states_the_size_target():
-    assert "3 to 8 minutes" in topics.SYSTEM_PROMPT and "NOT a new topic" in topics.SYSTEM_PROMPT
+def test_prompt_states_the_size_target_and_the_time_hints():
+    p = topics.SYSTEM_PROMPT
+    assert "3 to 6 minutes" in p and "NOT a new topic" in p and "start time" in p and "duration_sec" in p
+
+
+def test_user_message_carries_start_times_and_duration_from_the_transcript():
+    s = [Segment(id="seg_0001", start=0.04, end=7.5, text="one"),
+         Segment(id="seg_0002", start=7.55, end=30.26, text="two")]
+    client = FakeClient(lambda k, n: cuts_json(("A", "seg_0001")))
+    topics.split_topics(s, job_id="j", client=client)
+    sent = json.loads(client.calls[0]["messages"][1]["content"])
+    assert sent == {
+        "duration_sec": 30.3,
+        "segments": [{"id": "seg_0001", "start": 0.0, "text": "one"},
+                     {"id": "seg_0002", "start": 7.5, "text": "two"}],
+    }
+
+
+def test_start_or_duration_in_the_model_reply_is_ignored():
+    s = segs(4)
+    reply = json.dumps([{"title": "A", "first_segment_id": "seg_0000", "start": 5, "duration_sec": 9}])
+    r = run(s, lambda k, n: reply)
+    assert (r.sections[0].start, r.sections[0].end) == (s[0].start, s[-1].end)
 
 
 def test_empty_transcript_makes_no_call():

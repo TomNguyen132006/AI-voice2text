@@ -29,13 +29,14 @@ FALLBACK_PART_SEC = 300.0  # equal time parts when the model's answer is unusabl
 MIN_SECTION_SEC = 60.0  # a shorter section is merged into its neighbour (see merge_short)
 MAX_SECTION_SEC = 720.0  # a longer section is only flagged in the report, not changed
 
-SYSTEM_PROMPT = """You split a university lecture transcript into topics.
-"segments" is the whole lecture, in order, as [{"id", "text"}].
-Choose where each new topic starts. Give each topic a short, specific title (3 to 8 words).
+SYSTEM_PROMPT = """You split a university lecture transcript into topics (sections).
+The user message is JSON: "duration_sec" is the length of the lecture in seconds and "segments" is the
+whole lecture in order, as [{"id", "start", "text"}] where "start" is the segment start time in seconds.
+Choose where each new topic starts. Give each topic a short title (3 to 8 words) that only uses what is said in the lecture; do not invent topics or terms.
 Rules:
 - The first topic must start at the first segment.
 - Topics are consecutive: a topic ends where the next one starts. Do not skip or repeat segments.
-- The target is 3 to 8 minutes per topic. A short aside, a recap sentence or a change of example is NOT a new topic.
+- The target is about 3 to 6 minutes per topic. A short aside, a recap sentence or a change of example is NOT a new topic.
 Reply with ONLY a JSON list, in lecture order:
 [{"title": "<title>", "first_segment_id": "<id of the first segment of the topic>"}]
 No other text, no code fence."""
@@ -146,7 +147,10 @@ def split_topics(segments: list[Segment], *, job_id: str, client=None) -> TopicR
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": json.dumps(
-            {"segments": [{"id": s.id, "text": s.text} for s in segments]}, ensure_ascii=False)},
+            {
+                "duration_sec": round(segments[-1].end, 1),
+                "segments": [{"id": s.id, "start": round(s.start, 1), "text": s.text} for s in segments],
+            }, ensure_ascii=False)},
     ]
     max_tokens, cuts, reason = MAX_TOKENS, None, None
     for attempt in (1, 2):
