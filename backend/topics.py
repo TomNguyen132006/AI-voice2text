@@ -22,8 +22,9 @@ ROLE = "nano"
 STAGE = "topic_split"
 
 # Nano thinks before it answers (see clean.py); one call sees the whole lecture, so be generous.
+# Oct 17: with a numeric size target the thinking grew to 15-23k tokens, so 32000.
 # A truncated answer is retried once with double.
-MAX_TOKENS = 16000
+MAX_TOKENS = 32000
 
 FALLBACK_PART_SEC = 300.0  # equal time parts when the model's answer is unusable
 MIN_SECTION_SEC = 60.0  # a shorter section is merged into its neighbour (see merge_short)
@@ -32,11 +33,13 @@ MAX_SECTION_SEC = 720.0  # a longer section is only flagged in the report, not c
 SYSTEM_PROMPT = """You split a university lecture transcript into topics (sections).
 The user message is JSON: "duration_sec" is the length of the lecture in seconds and "segments" is the
 whole lecture in order, as [{"id", "start", "text"}] where "start" is the segment start time in seconds.
-Choose where each new topic starts. Give each topic a short title (3 to 8 words) that only uses what is said in the lecture; do not invent topics or terms.
+Start a new topic only where the lecturer starts a NEW subject. Do not divide the lecture into equal parts.
 Rules:
 - The first topic must start at the first segment.
 - Topics are consecutive: a topic ends where the next one starts. Do not skip or repeat segments.
-- The target is about 3 to 6 minutes per topic. A short aside, a recap sentence or a change of example is NOT a new topic.
+- Never cut inside an example, in the middle of an explanation, or at a sentence that continues the previous one.
+- A short aside, a recap sentence or a change of example is NOT a new topic. Fewer sections is better than many.
+- Titles are in Title Case, 3 to 8 words, and use only what is said in the lecture; do not invent topics or terms.
 Reply with ONLY a JSON list, in lecture order:
 [{"title": "<title>", "first_segment_id": "<id of the first segment of the topic>"}]
 No other text, no code fence."""

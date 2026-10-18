@@ -171,9 +171,10 @@ def test_after_merging_every_segment_is_covered_exactly_once(seed):
         assert all(x.end - x.start >= topics.MIN_SECTION_SEC for x in r.sections)
 
 
-def test_prompt_states_the_size_target_and_the_time_hints():
+def test_prompt_has_no_numeric_target_but_explains_the_time_hints():
     p = topics.SYSTEM_PROMPT
-    assert "3 to 6 minutes" in p and "NOT a new topic" in p and "start time" in p and "duration_sec" in p
+    assert "minutes" not in p and "equal parts" in p and "NEW subject" in p and "Title Case" in p
+    assert "start time" in p and "duration_sec" in p
 
 
 def test_user_message_carries_start_times_and_duration_from_the_transcript():
