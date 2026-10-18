@@ -11,7 +11,8 @@ the lecture.
 
 Built for the Nebius x NVIDIA Global AI Hackathon (track: Best Apps and Agents).
 
-> Status: early setup (Epic 0). Sections marked _TBD_ are filled in as we build.
+> Status: Epic 2 in progress. Done: transcription (S1), model layer `llm.py` (S2-1), cleaning `clean.py` (S2-2),
+> topic split `topics.py` (S2-3). In progress: long-transcript handling (S2-4). Sections marked _TBD_ are filled in as we build.
 
 ## Repo structure
 
@@ -272,6 +273,21 @@ Code guards revert a segment to the original text when the model adds digits/sym
   **timestamp** on every statement is what lets a person re-listen and check.
 
 Segment ids are from the 10-minute test clip (Oct 17); they change if the audio is re-transcribed.
+
+## Known limitations of topic split (S2-3)
+
+`backend/topics.py` (Nano) lets the model choose only where a new topic starts; the code builds ids and
+times and merges sections shorter than 60 s into a neighbour.
+
+- **Titles can be vague for long sections.** Example: a 412 s section covering gradient, level sets and
+  Hessian was titled "Gradient Direction Connection".
+- **Boundaries vary between runs.** The boundary at 186.9 s (checked by ear: a real topic change) was
+  found again with different prompts; the later boundaries were not stable (two runs with the same prompt
+  gave cuts 4 to 7 segments apart).
+- **Do not put a numeric duration target in the prompt** ("3 to 6 minutes"): the model then cuts the lecture
+  into equal parts (cuts at 34% and 66%) instead of at topic changes, even in the middle of an example.
+- **Time hints raise the reasoning tokens**: about 7.6k output tokens for a 10-minute clip (about 2.5k
+  without hints), so `MAX_TOKENS` is 32000.
 
 ## How sources work
 
