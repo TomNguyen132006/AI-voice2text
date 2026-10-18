@@ -12,7 +12,8 @@ the lecture.
 Built for the Nebius x NVIDIA Global AI Hackathon (track: Best Apps and Agents).
 
 > Status: Epic 2 in progress. Done: transcription (S1), model layer `llm.py` (S2-1), cleaning `clean.py` (S2-2),
-> topic split `topics.py` (S2-3). In progress: long-transcript handling (S2-4). Sections marked _TBD_ are filled in as we build.
+> topic split `topics.py` (S2-3), long-transcript handling (S2-4: batch checkpoints, topic windows, `sections.py`).
+> Next: golden test clip (S2-5). Sections marked _TBD_ are filled in as we build.
 
 ## Repo structure
 
@@ -288,6 +289,21 @@ times and merges sections shorter than 60 s into a neighbour.
   into equal parts (cuts at 34% and 66%) instead of at topic changes, even in the middle of an example.
 - **Time hints raise the reasoning tokens**: about 7.6k output tokens for a 10-minute clip (about 2.5k
   without hints), so `MAX_TOKENS` is 32000.
+
+## Long lectures (S2-4)
+
+- **Cleaning** (`clean.py`) works in batches of up to 15 segments and saves every answered batch to
+  `jobs/{id}/clean_batches/`; a rerun only calls the missing batches.
+- **Topic split** (`topics.py`) asks the whole lecture in one call when it is up to 22.5 minutes
+  (`WINDOW_SEC * 1.5`). Longer lectures are cut into overlapping windows (`WINDOW_SEC` 900 s,
+  `OVERLAP_SEC` 120 s). In the overlap the earlier window supplies boundaries before the middle (the
+  "seam") and the later window those after it; boundaries fewer than 3 segments apart count as one.
+  A window whose answer is invalid becomes "Part N" for that window only and is flagged in
+  `topics_report.json`.
+- `sections.for_each_section(segments, sections, fn)` runs a later step once per section.
+- Measured on the 52-minute test lecture (Oct 17): cleaning 36 batches, 667 s, about $0.087, 14 of 528
+  segments reverted by the guards; topic split 4 windows, 81 s, about $0.005. The topic split gave only 4
+  sections (the longest 1419 s), which is coarse: the prompt says "fewer sections is better".
 
 ## How sources work
 
