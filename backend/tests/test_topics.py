@@ -18,7 +18,7 @@ def isolated(monkeypatch, tmp_path):
     monkeypatch.setenv("LLM_LOG_PATH", str(tmp_path / "calls.jsonl"))
 
 
-def segs(n, step=20.0):
+def segs(n, step=100.0):
     return [Segment(id=f"seg_{i:04d}", start=i * step, end=i * step + step - 0.5, text=f"text {i}")
             for i in range(n)]
 
@@ -68,7 +68,7 @@ def test_bad_reply_is_retried_once_with_a_hint(bad):
 
 
 def test_bad_twice_uses_equal_time_parts_and_says_so():
-    s = segs(40)  # 800 s
+    s = segs(40, step=20.0)  # 800 s
     r = run(s, lambda k, n: "nope")
     assert r.report["used_fallback"] and r.report["fallback_reason"] == "invalid_reply"
     assert [x.title for x in r.sections] == ["Part 1", "Part 2", "Part 3"]
@@ -97,14 +97,82 @@ def test_llm_error_uses_fallback_and_does_not_crash():
     assert len(r.sections) == 1
 
 
-def test_short_and_long_sections_are_flagged_not_changed():
-    s = segs(50)  # 1000 s
-    r = run(s, lambda k, n: cuts_json(("A", "seg_0000"), ("B", "seg_0001"), ("C", "seg_0002")))
-    assert r.report["flagged"] == [
-        {"id": "sec_01", "reason": "too_short", "seconds": 20.0},
-        {"id": "sec_02", "reason": "too_short", "seconds": 20.0},
-        {"id": "sec_03", "reason": "too_long", "seconds": 959.5},
+def test_long_section_is_flagged_not_changed():
+    s = segs(20)  # 2000 s
+    r = run(s, lambda k, n: cuts_json(("A", "seg_0000"), ("B", "seg_0002")))
+    assert [x.title for x in r.sections] == ["A", "B"]
+    assert r.report["flagged"] == [{"id": "sec_02", "reason": "too_long", "seconds": 1799.5}]
+
+
+# ---------- merging short sections (MIN_SECTION_SEC = 60 s; segs(n, 20) = 20 s per segment) ----------
+
+def merge_run(n, *pairs):
+    s = segs(n, step=20.0)
+    r = run(s, lambda k, c: cuts_json(*pairs))
+    return s, r
+
+
+def test_short_middle_section_is_merged_into_the_previous_one():
+    s, r = merge_run(12, ("A", "seg_0000"), ("B", "seg_0004"), ("C", "seg_0007"), ("D", "seg_0008"))
+    assert [x.title for x in r.sections] == ["A", "B", "D"]
+    assert r.sections[1].segment_ids == ["seg_0004", "seg_0005", "seg_0006", "seg_0007"]
+    assert r.report["merged_short"] == [
+        {"merged_title": "C", "seconds": 20.0, "into_title": "B", "result_title": "B", "at": 140.0}
     ]
+    assert r.report["section_count"] == 3
+
+
+def test_short_first_section_is_merged_into_the_next_one():
+    s, r = merge_run(12, ("A", "seg_0000"), ("B", "seg_0002"), ("C", "seg_0006"))
+    assert [x.title for x in r.sections] == ["B", "C"]
+    assert r.sections[0].segment_ids[0] == "seg_0000" and r.sections[0].start == 0.0
+    assert r.report["merged_short"][0]["merged_title"] == "A"
+
+
+def test_short_last_section_is_merged_into_the_previous_one():
+    s, r = merge_run(12, ("A", "seg_0000"), ("B", "seg_0005"), ("C", "seg_0010"))
+    assert [x.title for x in r.sections] == ["A", "B"]
+    assert r.sections[-1].end == s[-1].end
+
+
+def test_merged_section_keeps_the_title_of_the_longer_part():
+    s, r = merge_run(12, ("A", "seg_0000"), ("B", "seg_0001"), ("C", "seg_0005"))
+    # A = 20 s (shortest) is merged into B = 80 s: the merged section is called "B"
+    assert [x.title for x in r.sections] == ["B", "C"]
+    assert r.report["merged_short"][0]["result_title"] == "B"
+
+
+def test_all_sections_short_gives_one_section():
+    s, r = merge_run(6, ("A", "seg_0000"), ("B", "seg_0002"), ("C", "seg_0004"))
+    assert len(r.sections) == 1 and len(r.report["merged_short"]) == 2
+    assert r.sections[0].segment_ids == [x.id for x in s]
+    assert r.report["flagged"] == []
+
+
+def test_lone_short_lecture_is_flagged():
+    s, r = merge_run(2, ("A", "seg_0000"))
+    assert r.report["flagged"][0]["reason"] == "too_short"
+
+
+@pytest.mark.parametrize("seed", range(30))
+def test_after_merging_every_segment_is_covered_exactly_once(seed):
+    import random
+
+    rnd = random.Random(seed)
+    n = rnd.randint(1, 40)
+    s = segs(n, step=rnd.choice([5.0, 20.0, 50.0]))
+    starts = sorted({0, *rnd.sample(range(n), k=rnd.randint(0, n - 1))})
+    r = run(s, lambda k, c: cuts_json(*[(f"T{i}", f"seg_{i:04d}") for i in starts]))
+    assert [i for x in r.sections for i in x.segment_ids] == [x.id for x in s]
+    for a, b in zip(r.sections, r.sections[1:]):
+        assert a.end == b.start
+    assert r.sections[0].start == s[0].start and r.sections[-1].end == s[-1].end
+    if len(r.sections) > 1:
+        assert all(x.end - x.start >= topics.MIN_SECTION_SEC for x in r.sections)
+
+
+def test_prompt_states_the_size_target():
+    assert "3 to 8 minutes" in topics.SYSTEM_PROMPT and "NOT a new topic" in topics.SYSTEM_PROMPT
 
 
 def test_empty_transcript_makes_no_call():

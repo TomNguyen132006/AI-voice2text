@@ -26,8 +26,8 @@ STAGE = "topic_split"
 MAX_TOKENS = 16000
 
 FALLBACK_PART_SEC = 300.0  # equal time parts when the model's answer is unusable
-MIN_SECTION_SEC = 30.0  # shorter or longer sections are flagged in the report, not changed
-MAX_SECTION_SEC = 720.0
+MIN_SECTION_SEC = 60.0  # a shorter section is merged into its neighbour (see merge_short)
+MAX_SECTION_SEC = 720.0  # a longer section is only flagged in the report, not changed
 
 SYSTEM_PROMPT = """You split a university lecture transcript into topics.
 "segments" is the whole lecture, in order, as [{"id", "text"}].
@@ -35,7 +35,7 @@ Choose where each new topic starts. Give each topic a short, specific title (3 t
 Rules:
 - The first topic must start at the first segment.
 - Topics are consecutive: a topic ends where the next one starts. Do not skip or repeat segments.
-- Aim for topics of about 2 to 10 minutes. Do not make a new topic for every few sentences.
+- The target is 3 to 8 minutes per topic. A short aside, a recap sentence or a change of example is NOT a new topic.
 Reply with ONLY a JSON list, in lecture order:
 [{"title": "<title>", "first_segment_id": "<id of the first segment of the topic>"}]
 No other text, no code fence."""
@@ -82,6 +82,35 @@ def build_sections(segments: list[Segment], cuts: list[tuple[str, int]]) -> list
     return sections
 
 
+def _lengths(segments: list[Segment], cuts: list[tuple[str, int]]) -> list[float]:
+    starts = [segments[i].start for _, i in cuts]
+    ends = starts[1:] + [segments[-1].end]
+    return [e - b for b, e in zip(starts, ends)]
+
+
+def merge_short(segments: list[Segment], cuts: list[tuple[str, int]]) -> tuple[list[tuple[str, int]], list[dict]]:
+    """Merge sections shorter than MIN_SECTION_SEC, shortest first, into the previous one (the
+    first section into the next). The merged section keeps the title of the longer of the two.
+    Cutting at segment starts keeps the sections contiguous. Returns (cuts, merges for the report)."""
+    cuts, merges = list(cuts), []
+    while len(cuts) > 1:
+        lengths = _lengths(segments, cuts)
+        short = min(range(len(cuts)), key=lambda k: lengths[k])
+        if lengths[short] >= MIN_SECTION_SEC:
+            break
+        other = short - 1 if short > 0 else 1
+        keep_title = cuts[short][0] if lengths[short] > lengths[other] else cuts[other][0]
+        merges.append({
+            "merged_title": cuts[short][0], "seconds": round(lengths[short], 1),
+            "into_title": cuts[other][0], "result_title": keep_title,
+            "at": round(segments[cuts[short][1]].start, 1),
+        })
+        first = min(short, other)
+        cuts[first] = (keep_title, cuts[first][1])
+        del cuts[max(short, other)]
+    return cuts, merges
+
+
 def fallback_cuts(segments: list[Segment]) -> list[tuple[str, int]]:
     cuts, part_start = [], None
     for i, s in enumerate(segments):
@@ -110,7 +139,7 @@ def split_topics(segments: list[Segment], *, job_id: str, client=None) -> TopicR
         "est_cost_usd": 0.0, "cost_is_lower_bound": False,
     }
     if not segments:
-        report.update(section_count=0, flagged=[])
+        report.update(section_count=0, merged_short=[], flagged=[])
         return TopicResult([], report)
 
     client = client or llm.make_client()
@@ -158,8 +187,11 @@ def split_topics(segments: list[Segment], *, job_id: str, client=None) -> TopicR
     if cuts is None:
         cuts = fallback_cuts(segments)
         report.update(used_fallback=True, fallback_reason=reason)
+    merges = []
+    if not report["used_fallback"]:
+        cuts, merges = merge_short(segments, cuts)
     sections = build_sections(segments, cuts)
-    report.update(section_count=len(sections), flagged=_flagged(sections))
+    report.update(section_count=len(sections), merged_short=merges, flagged=_flagged(sections))
     return TopicResult(sections, report)
 
 
