@@ -46,6 +46,7 @@ def test_run_with_a_good_model_passes_all_checks():
     soft = r["soft"]
     assert all(i["ok"] for k in ("must_fix", "must_not_change") for i in soft[k]), soft
     assert soft["boundary"]["ok"] and soft["boundary"]["distance"] == 0
+    assert [o["ok"] for o in soft["optional_boundaries"]] == [False]  # seg_0015 is optional: absent is fine
     assert [s.id for s in r["sections"]] == ["sec_01", "sec_02"]
 
 

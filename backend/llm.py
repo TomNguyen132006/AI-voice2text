@@ -197,8 +197,9 @@ def call_model(
         )
 
 
-def summarize_log(path: Path | None = None) -> dict:
-    """Totals over a call log. A null est_cost_usd is UNKNOWN, never counted as zero."""
+def summarize_log(path: Path | None = None, job_id: str | None = None) -> dict:
+    """Totals over a call log (only rows of one job if job_id is given).
+    A null est_cost_usd is UNKNOWN, never counted as zero."""
     by_status: dict[str, int] = {}
     total_cost = 0.0
     unknown = damaged = calls = 0
@@ -209,6 +210,8 @@ def summarize_log(path: Path | None = None) -> dict:
                 row = json.loads(raw)
             except json.JSONDecodeError:
                 damaged += 1
+                continue
+            if job_id is not None and row.get("job_id") != job_id:
                 continue
             calls += 1
             by_status[row["status"]] = by_status.get(row["status"], 0) + 1
