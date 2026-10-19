@@ -11,9 +11,10 @@ the lecture.
 
 Built for the Nebius x NVIDIA Global AI Hackathon (track: Best Apps and Agents).
 
-> Status: Epic 2 in progress. Done: transcription (S1), model layer `llm.py` (S2-1), cleaning `clean.py` (S2-2),
-> topic split `topics.py` (S2-3), long-transcript handling (S2-4: batch checkpoints, topic windows, `sections.py`).
-> Next: golden test clip (S2-5). Sections marked _TBD_ are filled in as we build.
+> Status: Epic 2 done (Oct 19). Transcription (S1), model layer `llm.py` (S2-1), cleaning `clean.py` (S2-2),
+> topic split `topics.py` (S2-3), long transcripts (S2-4), golden test `backend/golden/` (S2-5) and the
+> end-to-end entry point `python backend/run_epic2.py <transcript.json>` (clean + topic split, prints the
+> sections and the cost of the job). Next: Epic 3. Sections marked _TBD_ are filled in as we build.
 
 ## Repo structure
 
@@ -324,6 +325,15 @@ times and merges sections shorter than 60 s into a neighbour.
   in 3 of 3 runs (the cut at seg_0015 in 2 of 3). So **a change counts as real only if it is larger
   than this**: roughly 2 to 6 of 36 cleaned segments, or one extra cut, can differ between two runs
   of the same code.
+
+## Latency and timeouts (Epic 2, from the call log)
+
+- Nano, 114 attempts: p50 26 s, p90 58 s, max 116 s. Successful calls only: p50 23 s, p90 49 s, max 99 s.
+  The 15 truncated calls ran 104 to 116 s (20000 tokens, about 170 tokens/s). Super and Ultra: one tiny call each
+  (1.3 s and 1.0 s), not enough data.
+- 2 attempts timed out at `DEFAULT_TIMEOUT_SEC` = 120 s (job_full52, cleaning, Oct 18); the retry of one finished in 9 s.
+- Proposal (NOT applied, per-role overrides exist in `llm_config.py`): Nano 300 s, because the doubled retry
+  asks for 40000 tokens, about 235 s at that speed; Super and Ultra keep 120 s until we have measured the judge.
 
 ## How sources work
 
