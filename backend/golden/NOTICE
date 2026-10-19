@@ -1,0 +1,16 @@
+Golden test data: excerpt.json
+
+excerpt.json holds text segments (ids, times, speech-to-text wording) of about 3.4 minutes of
+Lecture 22 (gradient descent) of MIT OpenCourseWare 18.065
+(Matrix Methods in Data Analysis, Signal Processing, and Machine Learning, Spring 2018),
+taught by Prof. Gilbert Strang. The text was produced by our own speech-to-text run on the
+lecture video. No audio or video is stored in this repository.
+
+Source: MIT OpenCourseWare, https://ocw.mit.edu
+License: Creative Commons Attribution-NonCommercial-ShareAlike 4.0 (CC BY-NC-SA 4.0),
+https://creativecommons.org/licenses/by-nc-sa/4.0/
+Changes: speech-to-text transcription and cut to a short excerpt.
+
+This NOTICE and the license above apply to the files in this folder that contain lecture
+content (excerpt.json). The project code is MIT licensed (see the LICENSE file at the top
+of the repository).
