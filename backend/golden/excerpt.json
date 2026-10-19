@@ -178,5 +178,41 @@
     "start": 197.03,
     "end": 201.75,
     "text": "F of xy equals say 2x plus 5y."
+  },
+  {
+    "id": "seg_0031",
+    "start": 203.59,
+    "end": 215.59,
+    "text": "I just think we ought to get totally familiar with these uh we're doing something, you know, we're we're jumping into uh uh an important topic."
+  },
+  {
+    "id": "seg_0032",
+    "start": 215.91,
+    "end": 231.03,
+    "text": "When I ask you what's the gradient, that's a freshman question, but let's just rem be sure we know how to interpret the gradient, how to compute it, what it means, what uh how to see it geometrically."
+  },
+  {
+    "id": "seg_0033",
+    "start": 231.19,
+    "end": 233.67,
+    "text": "So what's the gradient of that function?"
+  },
+  {
+    "id": "seg_0034",
+    "start": 233.83,
+    "end": 238.87,
+    "text": "It's a function of two variables, so the gradient is a vector with two components."
+  },
+  {
+    "id": "seg_0035",
+    "start": 239.46,
+    "end": 250.34,
+    "text": "And they are the derivative with respect to x, which is 2, and the derivative with respect to y, which is 5."
+  },
+  {
+    "id": "seg_0036",
+    "start": 250.58,
+    "end": 264.82,
+    "text": "So the in this case the gradient is constant, and the hessian, which I often call h after Hessian or del squared f would tell us we're taking second derivatives."
   }
 ]

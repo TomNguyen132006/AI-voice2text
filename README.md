@@ -305,6 +305,26 @@ times and merges sections shorter than 60 s into a neighbour.
   segments reverted by the guards; topic split 4 windows, 81 s, about $0.005. The topic split gave only 4
   sections (the longest 1419 s), which is coarse: the prompt says "fewer sections is better".
 
+## Golden test (S2-5)
+
+`backend/golden/run_golden.py` cleans and splits a 264 s excerpt (36 segments, text only, see
+`backend/golden/NOTICE` for the license) and prints the differences. About $0.004 per run.
+
+- **Hard checks** (exit code 1): segment ids and times unchanged, sections cover every segment once with
+  no gap or overlap.
+- **Soft checks** (`backend/golden/checks.json`, reported only, never change the exit code):
+  `must_fix` (seg_0026 "Hessians"), `must_not_change` (seg_0018 keeps "minima"; seg_0021 gets no digits
+  or symbols), `known_unfixed` (seg_0005 "was" should be "plus": an ASR error the cleaner cannot fix),
+  and a boundary near seg_0027 (within 3 segments).
+- **Known baseline failure:** `must_not_change` seg_0018 FAILS in every run ("minima" becomes "minimum").
+  Recorded on purpose, the prompt was not changed for it.
+- **Noise baseline (3 live runs, Oct 19):** the same input gave 11, 12 and 13 changed segments; 29 of 36
+  segments had identical cleaned text in all 3 runs (best pair 32 of 36, worst pair 30 of 36); the
+  guards reverted seg_0031 in 2 of 3 runs. The sections were 2, 3 and 3; the cut at seg_0027 was found
+  in 3 of 3 runs (the cut at seg_0015 in 2 of 3). So **a change counts as real only if it is larger
+  than this**: roughly 2 to 6 of 36 cleaned segments, or one extra cut, can differ between two runs
+  of the same code.
+
 ## How sources work
 
 Every statement in the notes and slides must have a source: a lecture moment or a web page.

@@ -1,0 +1,35 @@
+{
+  "_comment": "Soft checks for run_golden.py. They are reported, never change the exit code.",
+  "must_fix": [
+    {
+      "id": "seg_0026",
+      "contains": "Hessians",
+      "note": "ASR wrote 'Hesians'"
+    }
+  ],
+  "must_not_change": [
+    {
+      "id": "seg_0018",
+      "keeps": "minima",
+      "note": "Tom checked by ear: the speaker really said 'minima'"
+    },
+    {
+      "id": "seg_0021",
+      "no_new_symbols": true,
+      "note": "speaker said 'x star is zero zero'; '(0,0)' would be invented formatting"
+    }
+  ],
+  "known_unfixed": [
+    {
+      "id": "seg_0005",
+      "wrong": "was",
+      "right": "plus",
+      "note": "ASR error ('x1 squared plus bx2 squared'); the cleaner cannot fix it. Reported, never a failure"
+    }
+  ],
+  "boundary": {
+    "expected_first_segment": "seg_0027",
+    "within_segments": 3,
+    "note": "stable topic boundary at 186.9 s ('So what does the gradient tell us?')"
+  }
+}

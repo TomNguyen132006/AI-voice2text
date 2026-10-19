@@ -1,13 +1,15 @@
 """Golden test (S2-5): clean + topic split on a short real excerpt, then print the differences.
 
-Usage (from backend/):  python golden/run_golden.py      (2-3 real Nano calls, well under $0.01)
+Usage (from backend/):  python golden/run_golden.py [--save out.json]   (3-4 real Nano calls, about $0.004)
 
 HARD checks fail the run (exit 1): segment ids preserved, times unchanged, sections have no gap and
 no overlap and cover every segment exactly once.
-SOFT checks are only reported (the model is not deterministic): known mistakes that should be fixed,
-words that should be left alone, how many segments changed or were reverted.
-Data: excerpt.json (see NOTICE for the license). Nothing is written to disk.
+SOFT checks (checks.json) are only reported and never change the exit code (the model is not
+deterministic): must_fix, must_not_change, known_unfixed (ASR errors the cleaner cannot fix), the
+boundary near the expected topic change and, if expected_*.json exist, similarity to the ideal text.
+Data: excerpt.json (see NOTICE for the license). Nothing is written to disk except --save.
 """
+import difflib
 import json
 import re
 import sys
@@ -27,16 +29,9 @@ from schemas import Segment
 
 JOB_ID = "golden"
 
-# (segment id, wrong text, right text). Wording from our own listening checks (Oct 8, Oct 17).
-MUST_FIX = [
-    ("seg_0005", "was", "plus"),  # "x1 squared was bx2 squared": the math needs "plus"
-    ("seg_0026", "Hesians", "Hessians"),
-]
-# (segment id, text that must still be there, why). The cleaner must leave these alone.
-MUST_KEEP = [
-    ("seg_0018", "minima", "heard by ear: the speaker really said it"),
-]
-NO_NEW_SYMBOLS = ["seg_0021"]  # speaker said "x star is zero zero": formatting like "(0,0)" is invented
+CHECKS_PATH = HERE / "checks.json"  # soft checks: must_fix, must_not_change, known_unfixed, boundary
+EXPECTED_CLEAN = HERE / "expected_clean.json"  # ideal cleaned text per segment (optional)
+EXPECTED_SECTIONS = HERE / "expected_sections.json"  # [{"title", "first_segment_id"}] (optional)
 
 
 def load_excerpt() -> list[Segment]:
@@ -67,20 +62,57 @@ def hard_checks(original, cleaned, sections) -> list[str]:
     return problems
 
 
-def soft_checks(original, cleaned) -> list[tuple[bool, str]]:
+def load_checks() -> dict:
+    return json.loads(CHECKS_PATH.read_text(encoding="utf-8"))
+
+
+def soft_checks(original, cleaned, sections, checks=None) -> dict:
+    """The three lists from checks.json plus the boundary check. Each item: {ok, msg}. Never fatal."""
+    checks = checks or load_checks()
     orig = {s.id: s.text for s in original}
     new = {s.id: s.text for s in cleaned}
-    out = []
-    for sid, wrong, right in MUST_FIX:
-        ok = right in new[sid] and wrong not in re.findall(r"[\w']+", new[sid])
-        out.append((ok, f"{sid} fix '{wrong}' -> '{right}': {new[sid]!r}"))
-    for sid, word, why in MUST_KEEP:
-        out.append((word in new[sid], f"{sid} keeps '{word}' ({why})"))
-    for sid in NO_NEW_SYMBOLS:
-        added = set(new[sid]) - set(orig[sid])
-        bad = {c for c in added if c in clean.NEW_SYMBOL_CHARS or c.isdigit()}
-        out.append((not bad, f"{sid} adds no symbols/digits (added: {sorted(bad) or 'none'})"))
+    out = {"must_fix": [], "must_not_change": [], "known_unfixed": [], "boundary": None}
+    for c in checks["must_fix"]:
+        out["must_fix"].append({"ok": c["contains"] in new[c["id"]],
+                                "msg": f"{c['id']} contains '{c['contains']}': {new[c['id']]!r}"})
+    for c in checks["must_not_change"]:
+        if "keeps" in c:
+            out["must_not_change"].append({"ok": c["keeps"] in new[c["id"]],
+                                           "msg": f"{c['id']} keeps '{c['keeps']}': {new[c['id']]!r}"})
+        if c.get("no_new_symbols"):
+            added = set(new[c["id"]]) - set(orig[c["id"]])
+            bad = sorted(ch for ch in added if ch in clean.NEW_SYMBOL_CHARS or ch.isdigit())
+            out["must_not_change"].append({"ok": not bad,
+                                           "msg": f"{c['id']} gets no new digits/symbols (added: {bad or 'none'})"})
+    for c in checks["known_unfixed"]:
+        fixed = c["right"] in re.findall(r"[\w']+", new[c["id"]])
+        state = "FIXED" if fixed else "still wrong (known, not a failure)"
+        out["known_unfixed"].append({"ok": fixed, "msg": f"{c['id']} '{c['wrong']}' -> '{c['right']}': {state}"})
+    index = {s.id: i for i, s in enumerate(original)}
+    want = index[checks["boundary"]["expected_first_segment"]]
+    cuts = [index[s.segment_ids[0]] for s in sections[1:]]
+    nearest = min(cuts, key=lambda i: abs(i - want), default=None)
+    dist = None if nearest is None else abs(nearest - want)
+    where = "none found" if dist is None else f"nearest cut at {original[nearest].id}, {dist} segment(s) away"
+    out["boundary"] = {"ok": dist is not None and dist <= checks["boundary"]["within_segments"], "distance": dist,
+                       "msg": f"boundary near {checks['boundary']['expected_first_segment']}: {where}"}
     return out
+
+
+def expected_report(original, cleaned, sections) -> dict | None:
+    """Compare with expected_clean.json / expected_sections.json when both exist: text similarity per
+    segment and how far each expected boundary is from the nearest actual one. Report only."""
+    if not (EXPECTED_CLEAN.is_file() and EXPECTED_SECTIONS.is_file()):
+        return None
+    exp = {s["id"]: s["text"] for s in json.loads(EXPECTED_CLEAN.read_text(encoding="utf-8"))}
+    sim = {s.id: difflib.SequenceMatcher(None, s.text, exp[s.id]).ratio() for s in cleaned}
+    index = {s.id: i for i, s in enumerate(original)}
+    got = [index[s.segment_ids[0]] for s in sections[1:]]
+    moved = []
+    for e in json.loads(EXPECTED_SECTIONS.read_text(encoding="utf-8"))[1:]:
+        i = index[e["first_segment_id"]]
+        moved.append((e["first_segment_id"], min((abs(g - i) for g in got), default=None)))
+    return {"similarity": sim, "boundary_moved": moved}
 
 
 def run(client=None, segments=None) -> dict:
@@ -95,7 +127,8 @@ def run(client=None, segments=None) -> dict:
         "clean_report": cleaned_result.report,
         "topics_report": split_result.report,
         "hard": hard_checks(segments, cleaned_result.segments, split_result.sections),
-        "soft": soft_checks(segments, cleaned_result.segments),
+        "soft": soft_checks(segments, cleaned_result.segments, split_result.sections),
+        "expected": expected_report(segments, cleaned_result.segments, split_result.sections),
     }
 
 
@@ -113,10 +146,27 @@ def main() -> int:
     print(f"\n== Sections ({len(r['sections'])}, fallback used: {tr['used_fallback']}) ==")
     for s in r["sections"]:
         print(f"  {s.id} {s.start:7.1f}-{s.end:7.1f}  {len(s.segment_ids):2d} segs  {s.title}")
-    print("\n== SOFT checks (report only) ==")
-    for ok, msg in r["soft"]:
-        print(f"  [{'ok' if ok else 'MISS'}] {msg}")
-    print(f"  soft: {sum(ok for ok, _ in r['soft'])} of {len(r['soft'])} ok")
+    soft = r["soft"]
+    print("\n== SOFT checks (report only, never change the exit code) ==")
+    for name in ("must_fix", "must_not_change", "known_unfixed"):
+        items = soft[name]
+        word = "fixed" if name == "known_unfixed" else "pass"
+        print(f"  {name}: {sum(i['ok'] for i in items)} of {len(items)} {word}")
+        for i in items:
+            mark = ("FIXED" if i["ok"] else "known") if name == "known_unfixed" else ("ok" if i["ok"] else "FAIL")
+            print(f"    [{mark}] {i['msg']}")
+    print(f"  boundary: [{'ok' if soft['boundary']['ok'] else 'MISS'}] {soft['boundary']['msg']}")
+    if r["expected"]:
+        sims = r["expected"]["similarity"]
+        print(f"  vs expected: mean similarity {sum(sims.values()) / len(sims):.3f}; "
+              f"below 1.0: {[f'{k} {v:.2f}' for k, v in sims.items() if v < 1.0]}")
+        print(f"  expected boundaries: distance to nearest actual cut (segments): {r['expected']['boundary_moved']}")
+    if "--save" in sys.argv:
+        out = {"cleaned": {s.id: s.text for s in r["cleaned"]}, "cuts": [s.segment_ids[0] for s in r["sections"]],
+               "titles": [s.title for s in r["sections"]], "reverted": cr["reverted"],
+               "changed": cr["changed_count"], "cost": cr["est_cost_usd"] + tr["est_cost_usd"],
+               "soft": {k: ([i["ok"] for i in v] if isinstance(v, list) else v["ok"]) for k, v in soft.items()}}
+        Path(sys.argv[sys.argv.index("--save") + 1]).write_text(json.dumps(out, indent=1), encoding="utf-8")
     cost = cr["est_cost_usd"] + tr["est_cost_usd"]
     print(f"\ncalls: clean {cr['calls']} + topics {tr['calls']}; "
           f"tokens: {cr['prompt_tokens'] + tr['prompt_tokens']} prompt + "
