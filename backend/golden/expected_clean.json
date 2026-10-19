@@ -1,0 +1,218 @@
+[
+  {
+    "id": "seg_0001",
+    "start": 0.24,
+    "end": 12.4,
+    "text": "Be sure to make some comments about the gradient and the Hessian and the role of convexity before we see the big a crucial example."
+  },
+  {
+    "id": "seg_0002",
+    "start": 12.64,
+    "end": 17.52,
+    "text": "So I've kind of prepared over here for this crucial example."
+  },
+  {
+    "id": "seg_0003",
+    "start": 19.12,
+    "end": 21.92,
+    "text": "The function is a pure quadratic."
+  },
+  {
+    "id": "seg_0004",
+    "start": 22.4,
+    "end": 27.2,
+    "text": "Two unknowns, x and y, pure quadratic."
+  },
+  {
+    "id": "seg_0005",
+    "start": 27.44,
+    "end": 42.48,
+    "text": "So every pure quadratic I can write in terms of a symmetric matrix S, and in this case, x1 squared plus bx2 squared, the symmetric, the matrix is just two by two."
+  },
+  {
+    "id": "seg_0006",
+    "start": 42.96,
+    "end": 49.52,
+    "text": "It's diagonal, it's got eigenvalues one and b sitting on the diagonal."
+  },
+  {
+    "id": "seg_0007",
+    "start": 49.68,
+    "end": 52.72,
+    "text": "I'm thinking of B as being the smaller one."
+  },
+  {
+    "id": "seg_0008",
+    "start": 53.28,
+    "end": 70.08,
+    "text": "So the condition number, which we'll see is all important in the question of the speed of convergence is the ratio of the largest to the smallest."
+  },
+  {
+    "id": "seg_0009",
+    "start": 70.32,
+    "end": 76.0,
+    "text": "In this case, the largest is one, the smallest is b, so that's one over b."
+  },
+  {
+    "id": "seg_0010",
+    "start": 76.4,
+    "end": 84.72,
+    "text": "And when that's when one over b is a big number, when b is a very small number, then that's when we're in trouble."
+  },
+  {
+    "id": "seg_0011",
+    "start": 85.04,
+    "end": 87.76,
+    "text": "The condition number of a matrix."
+  },
+  {
+    "id": "seg_0012",
+    "start": 88.08,
+    "end": 93.84,
+    "text": "Symmetric when the matrix is symmetric, that condition number is lambda max over lambda min."
+  },
+  {
+    "id": "seg_0013",
+    "start": 94.72,
+    "end": 101.52,
+    "text": "If I had an unsymmetric matrix, I would probably use sigma max over sigma min, of course."
+  },
+  {
+    "id": "seg_0014",
+    "start": 101.76,
+    "end": 104.88,
+    "text": "But here, matrices are symmetric."
+  },
+  {
+    "id": "seg_0015",
+    "start": 105.28,
+    "end": 114.72,
+    "text": "Okay, we're gonna see something neat is that we can actually take the steps of steepest descent."
+  },
+  {
+    "id": "seg_0016",
+    "start": 115.59,
+    "end": 122.47,
+    "text": "Write down what each step gives us and see how quickly they converge to the answer."
+  },
+  {
+    "id": "seg_0017",
+    "start": 122.55,
+    "end": 124.07,
+    "text": "And what is the answer?"
+  },
+  {
+    "id": "seg_0018",
+    "start": 124.31,
+    "end": 128.23,
+    "text": "So I'm minima, I haven't put in any linear term here."
+  },
+  {
+    "id": "seg_0019",
+    "start": 128.47,
+    "end": 131.59,
+    "text": "So I'm I just have a bowl sitting on the origin."
+  },
+  {
+    "id": "seg_0020",
+    "start": 131.91,
+    "end": 136.15,
+    "text": "So of course the minimum point is x equals zero, y equals zero."
+  },
+  {
+    "id": "seg_0021",
+    "start": 136.23,
+    "end": 142.79,
+    "text": "So the minimum point, x star, zero, of course."
+  },
+  {
+    "id": "seg_0022",
+    "start": 143.03,
+    "end": 146.55,
+    "text": "So the question will be how quickly do we get to that one?"
+  },
+  {
+    "id": "seg_0023",
+    "start": 146.71,
+    "end": 155.99,
+    "text": "And you'll say, pretty small example, not typical, but the terrific thing is that we see everything for this example."
+  },
+  {
+    "id": "seg_0024",
+    "start": 156.15,
+    "end": 160.39,
+    "text": "We can see the actual steps of steepest descent."
+  },
+  {
+    "id": "seg_0025",
+    "start": 160.55,
+    "end": 177.83,
+    "text": "We can see how quickly they converge to the x star, the answer, the place where this thing is a minimum, and we can begin to think what to do if it's too slow."
+  },
+  {
+    "id": "seg_0026",
+    "start": 178.07,
+    "end": 186.55,
+    "text": "Okay, so I'll come back, I'll come to that example after some general thoughts about gradients, Hessians."
+  },
+  {
+    "id": "seg_0027",
+    "start": 186.95,
+    "end": 189.19,
+    "text": "So what does the gradient tell us?"
+  },
+  {
+    "id": "seg_0028",
+    "start": 189.43,
+    "end": 192.79,
+    "text": "So let me just take an example of the gradient."
+  },
+  {
+    "id": "seg_0029",
+    "start": 194.63,
+    "end": 196.79,
+    "text": "Well, let me take a linear function."
+  },
+  {
+    "id": "seg_0030",
+    "start": 197.03,
+    "end": 201.75,
+    "text": "F of xy equals say 2x plus 5y."
+  },
+  {
+    "id": "seg_0031",
+    "start": 203.59,
+    "end": 215.59,
+    "text": "I just think we ought to get totally familiar with these we're doing something, you know, we're we're jumping into an important topic."
+  },
+  {
+    "id": "seg_0032",
+    "start": 215.91,
+    "end": 231.03,
+    "text": "When I ask you what's the gradient, that's a freshman question, but let's just rem be sure we know how to interpret the gradient, how to compute it, what it means, what how to see it geometrically."
+  },
+  {
+    "id": "seg_0033",
+    "start": 231.19,
+    "end": 233.67,
+    "text": "So what's the gradient of that function?"
+  },
+  {
+    "id": "seg_0034",
+    "start": 233.83,
+    "end": 238.87,
+    "text": "It's a function of two variables, so the gradient is a vector with two components."
+  },
+  {
+    "id": "seg_0035",
+    "start": 239.46,
+    "end": 250.34,
+    "text": "And they are the derivative with respect to x, which is 2, and the derivative with respect to y, which is 5."
+  },
+  {
+    "id": "seg_0036",
+    "start": 250.58,
+    "end": 264.82,
+    "text": "So the in this case the gradient is constant, and the Hessian, which I often call h after Hessian or del squared f would tell us we're taking second derivatives."
+  }
+]

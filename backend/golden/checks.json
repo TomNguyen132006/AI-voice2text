@@ -31,5 +31,12 @@
     "expected_first_segment": "seg_0027",
     "within_segments": 3,
     "note": "stable topic boundary at 186.9 s ('So what does the gradient tell us?')"
-  }
+  },
+  "optional_boundaries": [
+    {
+      "first_segment": "seg_0015",
+      "within_segments": 0,
+      "note": "found in 2 of 3 runs (Oct 19); reported if found, never a failure"
+    }
+  ]
 }

@@ -96,6 +96,11 @@ def soft_checks(original, cleaned, sections, checks=None) -> dict:
     where = "none found" if dist is None else f"nearest cut at {original[nearest].id}, {dist} segment(s) away"
     out["boundary"] = {"ok": dist is not None and dist <= checks["boundary"]["within_segments"], "distance": dist,
                        "msg": f"boundary near {checks['boundary']['expected_first_segment']}: {where}"}
+    out["optional_boundaries"] = []
+    for c in checks.get("optional_boundaries", []):
+        w = index[c["first_segment"]]
+        hit = any(abs(i - w) <= c["within_segments"] for i in cuts)
+        out["optional_boundaries"].append({"ok": hit, "msg": f"optional boundary at {c['first_segment']}: {'found' if hit else 'not found'}"})
     return out
 
 
@@ -156,6 +161,8 @@ def main() -> int:
             mark = ("FIXED" if i["ok"] else "known") if name == "known_unfixed" else ("ok" if i["ok"] else "FAIL")
             print(f"    [{mark}] {i['msg']}")
     print(f"  boundary: [{'ok' if soft['boundary']['ok'] else 'MISS'}] {soft['boundary']['msg']}")
+    for o in soft["optional_boundaries"]:
+        print(f"  [{'found' if o['ok'] else 'absent'}] {o['msg']} (optional, never a failure)")
     if r["expected"]:
         sims = r["expected"]["similarity"]
         print(f"  vs expected: mean similarity {sum(sims.values()) / len(sims):.3f}; "
