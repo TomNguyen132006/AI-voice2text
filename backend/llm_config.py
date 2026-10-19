@@ -14,6 +14,7 @@ BASE_URL = "https://api.tokenfactory.nebius.com/v1/"
 API_KEY_ENV = "NEBIUS_API_KEY"
 
 DEFAULT_TIMEOUT_SEC = 120.0
+# Nano thinks long: a call cut at 20000 tokens takes about 118 s, and the doubled retry (40000) about 235 s.
 MAX_RETRIES = 3  # retries after the first call, so up to 4 calls in total
 RETRY_BACKOFF_BASE_SEC = 1.0  # wait 1 s, 2 s, 4 s when the server sends no Retry-After
 RETRY_AFTER_CAP_SEC = 30.0  # never wait longer than this, even if Retry-After says so
@@ -33,7 +34,7 @@ class RoleConfig:
 
 
 ROLES = {
-    "nano": RoleConfig("nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B", 262_144, 0.06, 0.24),
+    "nano": RoleConfig("nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B", 262_144, 0.06, 0.24, timeout_sec=300.0),
     "super": RoleConfig("nvidia/nemotron-3-super-120b-a12b", 262_144, 0.30, 0.90),
     "ultra": RoleConfig("nvidia/Nemotron-3-Ultra-550b-a55b", 1_048_576, 1.00, 3.00),
 }

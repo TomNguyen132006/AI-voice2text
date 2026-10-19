@@ -21,7 +21,8 @@ def test_unknown_role_is_a_clear_error():
 
 
 def test_timeout_default_and_per_role_override(monkeypatch):
-    assert llm_config.timeout_for("nano") == llm_config.DEFAULT_TIMEOUT_SEC
+    assert llm_config.timeout_for("nano") == 300.0  # long enough for the doubled 40000-token retry
+    assert llm_config.timeout_for("super") == llm_config.timeout_for("ultra") == llm_config.DEFAULT_TIMEOUT_SEC == 120.0
     custom = llm_config.RoleConfig("x/y", 1000, 1.0, 2.0, timeout_sec=7.5)
     monkeypatch.setitem(llm_config.ROLES, "ultra", custom)
     assert llm_config.timeout_for("ultra") == 7.5

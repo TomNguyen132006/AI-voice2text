@@ -331,9 +331,9 @@ times and merges sections shorter than 60 s into a neighbour.
 - Nano, 114 attempts: p50 26 s, p90 58 s, max 116 s. Successful calls only: p50 23 s, p90 49 s, max 99 s.
   The 15 truncated calls ran 104 to 116 s (20000 tokens, about 170 tokens/s). Super and Ultra: one tiny call each
   (1.3 s and 1.0 s), not enough data.
-- 2 attempts timed out at `DEFAULT_TIMEOUT_SEC` = 120 s (job_full52, cleaning, Oct 18); the retry of one finished in 9 s.
-- Proposal (NOT applied, per-role overrides exist in `llm_config.py`): Nano 300 s, because the doubled retry
-  asks for 40000 tokens, about 235 s at that speed; Super and Ultra keep 120 s until we have measured the judge.
+- 2 attempts timed out at `DEFAULT_TIMEOUT_SEC` = 120 s (job_full52, cleaning, Oct 18); the retry of one finished in 9 s. The 300 s Nano timeout below is the fix.
+- Applied Oct 19 (`llm_config.py`): Nano timeout **300 s**, because a call cut at 20000 tokens takes about 118 s
+  and the doubled retry asks for 40000 tokens, about 235 s. Super and Ultra stay at 120 s until the judge is measured.
 
 ## How sources work
 

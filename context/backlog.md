@@ -81,6 +81,11 @@ goal, then "Done when" bullets.
   - 60-min lecture completes without context errors
 - **S2-5 Golden test clip**: fixed clip with saved expected outputs.
   - Script runs pipeline on the clip and shows differences
+- **Later items from Epic 2 (small, not for now)**:
+  - Re-split sections flagged too long: run the topic split again on that section's segments (the 52-minute lecture gave 4 sections, 1419 s and 733 s flagged).
+  - Cleaning prompt rule against replacing a valid technical word with a variant (seg_0018 "minima" -> "minimum" fails the golden check in 3 of 3 runs).
+  - Open risk: where Parakeet runs in production (the deployed server has no GPU).
+  - Open risk: whether third-party web search APIs are allowed for the web-sources step.
 
 ## Epic 3 — Enrichment (Oct 21)
 
