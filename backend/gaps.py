@@ -73,11 +73,8 @@ def _fold(word: str) -> str:
 
 
 def normalize_term(term: str) -> str:
-    """Lowercase, trimmed, words joined by one space, plural 's' of the last word folded."""
-    words = _words(term)
-    if words:
-        words[-1] = _fold(words[-1])
-    return " ".join(words)
+    """Lowercase, trimmed, words joined by one space, plural 's' of every word folded."""
+    return " ".join(_fold(w) for w in _words(term))
 
 
 def _count(term: str, segments: list[Segment]) -> int:
@@ -108,7 +105,7 @@ def _user_message(section: Section, segments: list[Segment]) -> str:
 
 def _validate(parsed: list, section: Section, segments: list[Segment], max_items: int) -> tuple[list[dict], list[dict]]:
     """(kept, dropped). dropped = [{"term", "reason"}]; the first rule an item breaks is its reason."""
-    known = set(_words(" ".join(s.text for s in segments)))
+    known = {_fold(w) for w in _words(" ".join(s.text for s in segments))}  # same folding as normalize_term
     kept, dropped, seen = [], [], set()
     for item in parsed:
         term, why = item.get("term"), item.get("reason")
@@ -117,8 +114,8 @@ def _validate(parsed: list, section: Section, segments: list[Segment], max_items
             dropped.append({"term": shown, "reason": f"wrong_section_id ({item.get('section_id')!r})"})
         elif not isinstance(term, str) or not isinstance(why, str) or not term.strip() or not why.strip():
             dropped.append({"term": shown, "reason": "missing_term_or_reason"})
-        elif not _words(term) or any(w not in known for w in _words(term)):
-            missing = [w for w in _words(term) if w not in known]
+        elif not _words(term) or any(w not in known for w in normalize_term(term).split()):
+            missing = [w for w in _words(term) if _fold(w) not in known]
             dropped.append({"term": shown, "reason": f"term_not_in_section ({', '.join(missing) or 'no words'})"})
         elif normalize_term(term) in seen:
             dropped.append({"term": shown, "reason": "duplicate"})

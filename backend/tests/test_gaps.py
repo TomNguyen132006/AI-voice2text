@@ -246,3 +246,11 @@ def test_format_table_lists_items_cost_and_dropped():
     result = run_multi(["gradient here", "gradients there"], {"sec_01": ["gradient"], "sec_02": ["gradients"]})
     text = gaps.format_table(result)
     assert "sec_01" in text and "gradient" in text and "duplicate_across_sections" in text and "cost $" in text
+
+
+def test_term_check_folds_plurals_like_the_dedupe():
+    # the section says "Hessians" and "gradient"; the model says the other form
+    result = run_multi(["the Hessians and the gradient"], {"sec_01": ["Hessian", "gradients", "Jacobians"]})
+    assert [i["term"] for i in result.items] == ["Hessian", "gradients"]
+    assert result.report["dropped"][0]["term"] == "Jacobians"
+    assert result.report["dropped"][0]["reason"].startswith("term_not_in_section")
