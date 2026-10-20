@@ -14,7 +14,7 @@ Built for the Nebius x NVIDIA Global AI Hackathon (track: Best Apps and Agents).
 > Status: Epic 2 done (Oct 19). Transcription (S1), model layer `llm.py` (S2-1), cleaning `clean.py` (S2-2),
 > topic split `topics.py` (S2-3), long transcripts (S2-4), golden test `backend/golden/` (S2-5) and the
 > end-to-end entry point `python backend/run_epic2.py <transcript.json>` (clean + topic split, prints the
-> sections and the cost of the job). Next: Epic 3. Sections marked _TBD_ are filled in as we build.
+> sections and the cost of the job). Epic 3 started: gap finder `gaps.py` (S3-1, Oct 20). Next: S3-2. Sections marked _TBD_ are filled in as we build.
 
 ## Repo structure
 
@@ -334,6 +334,23 @@ times and merges sections shorter than 60 s into a neighbour.
 - 2 attempts timed out at `DEFAULT_TIMEOUT_SEC` = 120 s (job_full52, cleaning, Oct 18); the retry of one finished in 9 s. The 300 s Nano timeout below is the fix.
 - Applied Oct 19 (`llm_config.py`): Nano timeout **300 s**, because a call cut at 20000 tokens takes about 118 s
   and the doubled retry asks for 40000 tokens, about 235 s. Super and Ultra stay at 120 s until the judge is measured.
+
+## Gap finder (S3-1)
+
+`backend/gaps.py`: for each section, Super gets the title and only that section's cleaned segments and
+returns `[{section_id, term, reason}]` (at most `GAPS_MAX_PER_SECTION` = 5, plain dicts, no schema change).
+Code checks every item: `section_id` must be the section asked, every word of `term` must occur in that
+section's text, duplicates and items over the maximum are dropped. Invalid JSON or a cut-off answer is
+retried once (cut-off with double `max_tokens`, start 16000), then the section gets an empty list and is
+flagged. Files: `jobs/{id}/gaps.json` and `jobs/{id}/gaps_report.json` (dropped items with reasons, calls, tokens, cost).
+
+Live run on `job_e2e_20261019_130712` (10 min, 3 sections, Oct 20): 3 calls, all `stop`, 15 gaps, 0 dropped,
+4,789 + 2,164 tokens (reasoning 440 to 646 of each answer, inside `completion_tokens`), $0.0034.
+Latency 6.8 s (14 segments), 8.0 s (12), 15.9 s (75) against the 120 s Super timeout: not too tight for these
+sizes. The model has not been tried on a 20+ minute section yet.
+Limits seen: terms repeat across sections (gradient, Hessian, convexity), some terms are generic
+("gradients", "minimum point"), and the reasons add general knowledge that is not in the lecture
+(the judge must not treat a gap `reason` as a lecture statement).
 
 ## How sources work
 
