@@ -14,7 +14,8 @@ Built for the Nebius x NVIDIA Global AI Hackathon (track: Best Apps and Agents).
 > Status: Epic 2 done (Oct 19). Transcription (S1), model layer `llm.py` (S2-1), cleaning `clean.py` (S2-2),
 > topic split `topics.py` (S2-3), long transcripts (S2-4), golden test `backend/golden/` (S2-5) and the
 > end-to-end entry point `python backend/run_epic2.py <transcript.json>` (clean + topic split, prints the
-> sections and the cost of the job). Epic 3 started: gap finder `gaps.py` (S3-1, Oct 20). Next: S3-2. Sections marked _TBD_ are filled in as we build.
+> sections and the cost of the job). Epic 3: gap finder `gaps.py` (S3-1, live-tested) and web search `enrich.py` (S3-2 wrapper, S3-3 cache,
+> S3-4 cap; tested with a fake provider only, **no live search yet**). Next: live check of Tavily, then Epic 4. Sections marked _TBD_ are filled in as we build.
 
 ## Repo structure
 
@@ -361,6 +362,33 @@ Polish run (Oct 20, prompt asks for terms used without or with only a brief expl
 dedupe): 9 gaps, 5 dropped, $0.0038. One run is not proof of stability: Super is not deterministic.
 Known gap: the "term must occur in the section" check does not fold plurals, so "Hessian" is dropped from a
 section that only says "Hessians".
+
+## Search (S3-2..S3-4)
+
+`backend/enrich.py` searches the web for the gaps in `gaps.json`. Settings are in `backend/search_config.py`:
+
+| Setting | Value | Meaning |
+|---|---|---|
+| `SEARCH_PROVIDER` (env, default `tavily`) | `tavily` or `fake` | `fake` = no network, no key. New providers (Brave, Serper) = one small class with `name` and `search()` |
+| `SEARCH_MAX_RESULTS` / `SEARCH_DEPTH` | 5 / `basic` | `basic` = 1 Tavily credit per search |
+| `SEARCH_TIMEOUT_SEC` | 20 | per HTTP call |
+| `SEARCH_MAX_RETRIES` | 2 | timeouts, connection errors, 5xx (waits 1 s, 2 s). 4xx: no retry. 429: one retry after `Retry-After` (max 30 s). 432/433: `SearchError` kind `quota`, no retry |
+| `SEARCH_CACHE_TTL_DAYS` | 7 | cache in `backend/.data/search_cache/` (git-ignored; shared by all jobs; lost when the server's disk resets) |
+| `SEARCH_CAP_PER_JOB` | 15 | real provider calls per job; cache hits do not count; a failed search counts |
+| `SEARCH_QUERY_WITH_TITLE` | `True` | query = term + section title; `False` = the term alone (to be decided after a live comparison) |
+
+Key: `TAVILY_API_KEY` in `.env` (name in `.env.example`, never in git). Tavily request: `POST https://api.tavily.com/search`,
+`Authorization: Bearer <key>`, body `{query, search_depth, max_results}` with answer/raw content/images off;
+`content` becomes `snippet`. URLs are kept exactly as returned, results without a URL are dropped.
+
+Files per job: `jobs/{id}/search.json` (one entry per search, cache hits included, with `cached` true/false: this is
+what the judge will compare web links against) and `jobs/{id}/search_report.json` (searches made, cache hits, provider calls,
+`skipped_cap`, errors). Order of searches: first gap of every section, then the second of every section, and so on.
+Run: `cd backend && python -m enrich <job_id>` (`SEARCH_PROVIDER=fake` works end to end).
+
+**Not proven yet:** everything above is tested with a fake HTTP client and a fake provider (286 tests). No live Tavily search
+has been made, so the real response shape, the real latency, the quality of "term + section title" queries and the
+credit cost are unchecked.
 
 ## How sources work
 
