@@ -3,8 +3,12 @@
 Per section the model sees only the section title and that section's cleaned segments, and
 answers [{"section_id", "term", "reason"}]. This code checks every item: the section_id must be
 the one asked, every word of the term must occur in that section's text, duplicates and items
-over the maximum are dropped. Dropped items are listed in the report, never silently lost.
-Gap items stay plain dicts (no schemas.py change).
+over the maximum are dropped. A term found in several sections is kept only in the section where
+it is said most often. Dropped items are listed in the report, never silently lost.
+Gap items stay plain dicts (no schemas.py change). The "reason" is a plain-text note for the search
+and the writer; it is NOT a Statement and the judge does not check it.
+
+Usage (from backend/):  python -m gaps <job_id>
 
 Files per job:
     jobs/{id}/gaps.json          list of {section_id, term, reason}
@@ -33,8 +37,9 @@ SYSTEM_PROMPT = """You help a beginner study a university lecture. The user mess
 with its "section_id", its "title" and its "segments" as [{"id", "start", "text"}].
 Find the terms or examples in THIS section that a beginner would need explained more.
 Rules:
+- Choose a term only if the lecturer uses it without explaining it, or explains it only briefly. Skip basic words the lecture already defines.
 - "term" is short and written as it is said in the section. Use only words that appear in the section's text; do not invent terms.
-- "reason" is one sentence on why a beginner needs this explained.
+- "reason" is one plain-text sentence on why a beginner needs this explained. No LaTeX, no math markup, no dollar signs or backslashes.
 - Give at most %d items, the most important first. An empty list is allowed if nothing needs more explanation.
 - "section_id" must be the section_id from the user message.
 Reply with ONLY a JSON list:
@@ -47,6 +52,7 @@ class SectionGaps:
     section_id: str
     items: list[dict]
     info: dict  # report entry: dropped items, flagged reason, per-attempt call facts, usage
+    counts: tuple[int, ...] = ()  # how often each item's term occurs in the section text (same order as items)
 
 
 @dataclass(frozen=True)
@@ -57,6 +63,36 @@ class GapsResult:
 
 def _words(text: str) -> list[str]:
     return re.findall(r"[\w']+", text.lower())
+
+
+def _fold(word: str) -> str:
+    """Fold a trailing plural 's' ("gradients" -> "gradient"); keeps "class", "analysis", "bus"."""
+    if len(word) > 3 and word.endswith("s") and not word.endswith(("ss", "us", "is")):
+        return word[:-1]
+    return word
+
+
+def normalize_term(term: str) -> str:
+    """Lowercase, trimmed, words joined by one space, plural 's' of the last word folded."""
+    words = _words(term)
+    if words:
+        words[-1] = _fold(words[-1])
+    return " ".join(words)
+
+
+def _count(term: str, segments: list[Segment]) -> int:
+    """How many times the (normalized) term occurs in the segments' text, plural forms included."""
+    want = normalize_term(term).split()
+    have = [_fold(w) for w in _words(" ".join(s.text for s in segments))]
+    return sum(have[i : i + len(want)] == want for i in range(len(have) - len(want) + 1)) if want else 0
+
+
+_MARKUP = re.compile(r"[$\\{}^_]")
+
+
+def clean_reason(text: str) -> str:
+    """Plain text on one line: LaTeX/markup characters removed ("$x^*$" -> "x*")."""
+    return " ".join(_MARKUP.sub("", text).split())
 
 
 def _user_message(section: Section, segments: list[Segment]) -> str:
@@ -84,11 +120,11 @@ def _validate(parsed: list, section: Section, segments: list[Segment], max_items
         elif not _words(term) or any(w not in known for w in _words(term)):
             missing = [w for w in _words(term) if w not in known]
             dropped.append({"term": shown, "reason": f"term_not_in_section ({', '.join(missing) or 'no words'})"})
-        elif " ".join(_words(term)) in seen:
+        elif normalize_term(term) in seen:
             dropped.append({"term": shown, "reason": "duplicate"})
         else:
-            seen.add(" ".join(_words(term)))
-            kept.append({"section_id": section.id, "term": term.strip(), "reason": why.strip()})
+            seen.add(normalize_term(term))
+            kept.append({"section_id": section.id, "term": term.strip(), "reason": clean_reason(why)})
     for item in kept[max_items:]:
         dropped.append({"term": item["term"], "reason": "over_max"})
     return kept[:max_items], dropped
@@ -138,7 +174,8 @@ def gaps_for_section(
             try:
                 kept, dropped = _validate(_parse_reply(result.text), section, segments, max_items)
                 info["dropped"], info["flagged"] = dropped, None  # a good retry clears the flag
-                return SectionGaps(section.id, kept, info)
+                counts = tuple(_count(i["term"], segments) for i in kept)
+                return SectionGaps(section.id, kept, info, counts)
             except ValueError as error:
                 reason, detail = "invalid_reply", str(error)
         info["flagged"] = reason
@@ -150,7 +187,32 @@ def gaps_for_section(
     return SectionGaps(section.id, [], info)
 
 
+def dedupe_across_sections(per_section: list[SectionGaps]) -> list[SectionGaps]:
+    """A term (normalized) found in several sections stays only where it is said most often;
+    a tie goes to the earliest section. The others are listed as duplicate_across_sections."""
+    best: dict[str, tuple[int, int]] = {}  # term -> (count, index of the section that keeps it)
+    for n, g in enumerate(per_section):
+        for item, count in zip(g.items, g.counts):
+            key = normalize_term(item["term"])
+            if key not in best or count > best[key][0]:
+                best[key] = (count, n)
+    out = []
+    for n, g in enumerate(per_section):
+        items, counts, dropped = [], [], list(g.info["dropped"])
+        for item, count in zip(g.items, g.counts):
+            keeper = best[normalize_term(item["term"])][1]
+            if keeper == n:
+                items.append(item)
+                counts.append(count)
+            else:
+                dropped.append({"term": item["term"],
+                                "reason": f"duplicate_across_sections (kept in {per_section[keeper].section_id})"})
+        out.append(SectionGaps(g.section_id, items, {**g.info, "dropped": dropped}, tuple(counts)))
+    return out
+
+
 def build_result(job_id: str, per_section: list[SectionGaps]) -> GapsResult:
+    per_section = dedupe_across_sections(per_section)
     report = {
         "job_id": job_id, "model_id": llm_config.get_role(ROLE).model_id,
         "max_per_section": GAPS_MAX_PER_SECTION, "section_count": len(per_section),
@@ -190,3 +252,24 @@ def gaps_job(job_id: str, storage=None, client=None) -> GapsResult:
     )
     save_result(job_id, result, storage)
     return result
+
+
+def format_table(result: GapsResult) -> str:
+    lines = [f"{'section':8} {'term':24} reason"]
+    lines += [f"{i['section_id']:8} {i['term'][:24]:24} {i['reason']}" for i in result.items]
+    r = result.report
+    lines += ["", f"{r['gap_count']} gaps, {len(r['dropped'])} dropped, {r['calls']} calls, "
+                  f"{r['prompt_tokens']} + {r['completion_tokens']} tokens, "
+                  f"cost ${r['est_cost_usd']:.5f}{' (lower bound)' if r['cost_is_lower_bound'] else ''}"]
+    lines += [f"  dropped {d['section_id']} {d['term']!r}: {d['reason']}" for d in r["dropped"]]
+    lines += [f"  FLAGGED {f['section_id']}: {f['reason']}" for f in r["flagged"]]
+    return "\n".join(lines)
+
+
+if __name__ == "__main__":
+    import sys
+
+    if len(sys.argv) != 2:
+        sys.exit("usage: python -m gaps <job_id>   (run from backend/)")
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    print(format_table(gaps_job(sys.argv[1])))

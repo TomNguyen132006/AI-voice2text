@@ -171,3 +171,78 @@ def test_gaps_job_saves_files_and_report_numbers(tmp_path):
 def test_no_sections_makes_no_call():
     result = gaps.find_gaps(SEGS, [], job_id="job_g1", client=FakeClient(lambda k, n: 1 / 0))
     assert result.items == [] and result.report["calls"] == 0
+
+
+# ---- polish (T7): plural folding, dedupe across sections, plain-text reason, CLI table ----
+
+def multi(texts):
+    segs = [Segment(id=f"seg_{i:04d}", start=i * 10.0, end=i * 10.0 + 9.5, text=t) for i, t in enumerate(texts)]
+    secs = [Section(id=f"sec_{i + 1:02d}", title=f"T{i + 1}", start=i * 10.0, end=i * 10.0 + 9.5,
+                    segment_ids=[segs[i].id]) for i in range(len(texts))]
+    return segs, secs
+
+
+def run_multi(texts, terms_by_section):
+    segs, secs = multi(texts)
+
+    def responder(k, n):
+        sid = payload_of(k)["section_id"]
+        return reply(*[item(t, sid) for t in terms_by_section.get(sid, [])])
+
+    return gaps.find_gaps(segs, secs, job_id="job_g3", client=FakeClient(responder))
+
+
+def test_normalize_term_folds_plural_only_where_safe():
+    n = gaps.normalize_term
+    assert n("Gradients") == n("gradient") == "gradient"
+    assert n("  Condition   Numbers ") == "condition number"
+    assert n("class") == "class" and n("analysis") == "analysis" and n("bus") == "bus"
+
+
+def test_plural_is_a_duplicate_inside_a_section():
+    result = run_multi(["gradient and gradients"], {"sec_01": ["gradient", "Gradients"]})
+    assert [i["term"] for i in result.items] == ["gradient"]
+    assert result.report["dropped"] == [{"section_id": "sec_01", "term": "Gradients", "reason": "duplicate"}]
+
+
+def test_term_kept_where_it_appears_most_and_duplicate_reported():
+    result = run_multi(
+        ["the gradient once", "gradient gradients gradient again", "no more"],
+        {"sec_01": ["gradient"], "sec_02": ["gradients"], "sec_03": []},
+    )
+    assert [(i["section_id"], i["term"]) for i in result.items] == [("sec_02", "gradients")]
+    assert result.report["dropped"] == [
+        {"section_id": "sec_01", "term": "gradient", "reason": "duplicate_across_sections (kept in sec_02)"}]
+    assert result.report["gap_count"] == 1
+
+
+def test_tie_goes_to_the_earliest_section():
+    result = run_multi(["gradient here", "gradients there"], {"sec_01": ["gradient"], "sec_02": ["gradients"]})
+    assert [(i["section_id"], i["term"]) for i in result.items] == [("sec_01", "gradient")]
+    assert result.report["dropped"][0]["section_id"] == "sec_02"
+
+
+def test_different_terms_are_not_merged_across_sections():
+    result = run_multi(["alpha beta", "alpha gamma"], {"sec_01": ["alpha"], "sec_02": ["gamma"]})
+    assert [i["term"] for i in result.items] == ["alpha", "gamma"] and result.report["dropped"] == []
+
+
+def test_multi_word_term_is_counted_as_a_phrase():
+    segs, _ = multi(["condition number and number condition, condition numbers"])
+    assert gaps._count("condition number", segs) == 2
+
+
+def test_latex_in_reason_is_stripped_in_code():
+    r, _ = one(lambda k, n: reply(item("Hessian", reason="The notation $x^{*}$ and \lambda_1 mean\n a thing.")))
+    reason = r.items[0]["reason"]
+    assert not any(c in reason for c in "$\\{}^_\n") and reason == "The notation x* and lambda1 mean a thing."
+
+
+def test_prompt_asks_for_plain_text_and_skips_defined_words():
+    assert "without explaining" in gaps.SYSTEM_PROMPT and "No LaTeX" in gaps.SYSTEM_PROMPT
+
+
+def test_format_table_lists_items_cost_and_dropped():
+    result = run_multi(["gradient here", "gradients there"], {"sec_01": ["gradient"], "sec_02": ["gradients"]})
+    text = gaps.format_table(result)
+    assert "sec_01" in text and "gradient" in text and "duplicate_across_sections" in text and "cost $" in text

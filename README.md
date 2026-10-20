@@ -344,13 +344,23 @@ section's text, duplicates and items over the maximum are dropped. Invalid JSON 
 retried once (cut-off with double `max_tokens`, start 16000), then the section gets an empty list and is
 flagged. Files: `jobs/{id}/gaps.json` and `jobs/{id}/gaps_report.json` (dropped items with reasons, calls, tokens, cost).
 
-Live run on `job_e2e_20261019_130712` (10 min, 3 sections, Oct 20): 3 calls, all `stop`, 15 gaps, 0 dropped,
+After validation, a term (lowercase, trailing plural "s" folded: "gradients" = "gradient") found in several
+sections is kept only in the section where it is said most often (tie: the earliest); the others are listed in
+`gaps_report.json` as `duplicate_across_sections`. Any LaTeX or markup characters in a `reason` are stripped in code.
+**The `reason` is a note for the search and the writer. It is not a `Statement` and the judge does not check it.**
+Repeat a run (from `backend/`): `python -m gaps <job_id>` (sections one at a time, saves both files, prints the
+table and the cost; about $0.004 for 3 sections).
+
+First live run (before polish):: 3 calls, all `stop`, 15 gaps, 0 dropped,
 4,789 + 2,164 tokens (reasoning 440 to 646 of each answer, inside `completion_tokens`), $0.0034.
 Latency 6.8 s (14 segments), 8.0 s (12), 15.9 s (75) against the 120 s Super timeout: not too tight for these
 sizes. The model has not been tried on a 20+ minute section yet.
-Limits seen: terms repeat across sections (gradient, Hessian, convexity), some terms are generic
-("gradients", "minimum point"), and the reasons add general knowledge that is not in the lecture
-(the judge must not treat a gap `reason` as a lecture statement).
+Limits seen then: terms repeated across sections, some terms were generic ("gradients", "minimum point"),
+and the reasons added general knowledge that is not in the lecture.
+Polish run (Oct 20, prompt asks for terms used without or with only a brief explanation, plus the cross-section
+dedupe): 9 gaps, 5 dropped, $0.0038. One run is not proof of stability: Super is not deterministic.
+Known gap: the "term must occur in the section" check does not fold plurals, so "Hessian" is dropped from a
+section that only says "Hessians".
 
 ## How sources work
 
