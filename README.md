@@ -14,8 +14,9 @@ Built for the Nebius x NVIDIA Global AI Hackathon (track: Best Apps and Agents).
 > Status: Epic 2 done (Oct 19). Transcription (S1), model layer `llm.py` (S2-1), cleaning `clean.py` (S2-2),
 > topic split `topics.py` (S2-3), long transcripts (S2-4), golden test `backend/golden/` (S2-5) and the
 > end-to-end entry point `python backend/run_epic2.py <transcript.json>` (clean + topic split, prints the
-> sections and the cost of the job). Epic 3: gap finder `gaps.py` (S3-1, live-tested) and web search `enrich.py` (S3-2 wrapper, S3-3 cache,
-> S3-4 cap; tested with a fake provider only, **no live search yet**). Next: live check of Tavily, then Epic 4. Sections marked _TBD_ are filled in as we build.
+> sections and the cost of the job). **Epic 3 done (Oct 22):** gap finder `gaps.py` (S3-1) and web search `enrich.py` (S3-2 wrapper, S3-3 cache,
+> S3-4 cap), both run live. Not proven live: the 429/5xx paths and the content quality of the search results. Next: Epic 4.
+> Sections marked _TBD_ are filled in as we build.
 
 ## Repo structure
 
@@ -379,7 +380,7 @@ section that only says "Hessians".
 | `SEARCH_MAX_RETRIES` | 2 | timeouts, connection errors, 5xx (waits 1 s, 2 s). 4xx: no retry. 429: one retry after `Retry-After` (max 30 s). 432/433: `SearchError` kind `quota`, no retry |
 | `SEARCH_CACHE_TTL_DAYS` | 7 | cache in `backend/.data/search_cache/` (git-ignored; shared by all jobs; lost when the server's disk resets) |
 | `SEARCH_CAP_PER_JOB` | 15 | real provider calls per job; cache hits do not count; a failed search counts |
-| `SEARCH_QUERY_MODE` (env var wins) | `"title"` | `"term"` = the term alone, `"title"` = term + section title, `"model"` = the `query` Super wrote (the term if the gap has none). Default to be decided by Tom after the live comparison. `SEARCH_QUERY_WITH_TITLE` stays as a read-only alias |
+| `SEARCH_QUERY_MODE` (env var wins) | `"model"` | `"term"` = the term alone, `"title"` = term + section title, `"model"` = the `query` Super wrote (the term if the gap has none). Default `"model"` (Tom, Oct 22). `SEARCH_QUERY_WITH_TITLE` stays as a read-only alias |
 
 Key: `TAVILY_API_KEY` in `.env` (name in `.env.example`, never in git). Tavily request: `POST https://api.tavily.com/search`,
 `Authorization: Bearer <key>`, body `{query, search_depth, max_results}` with answer/raw content/images off;
@@ -397,12 +398,21 @@ may point to URLs that are no longer in the file, so regenerate the notes after 
 credits summed from `usage` equal our own count; on job_e2e_20261019_130712, 9 gaps -> 9 provider calls, 45 results, every result
 has a url; a second `python -m enrich` makes 0 provider calls (9 cache hits). Caveat: the second run overwrites `search.json`,
 so all its entries then say `cached: true` (the first run's `cached: false` is gone).
-**Not proven yet:** whether "term + section title" is the better query (bare "x star" returns boats and a finance site; the
-title version returns steepest-descent pages, but "level set" + title drifts to Hessian pages): Tom decides
-`SEARCH_QUERY_MODE`. Live run of mode `model` (Oct 22, 8 gaps, 8 credits, $0.0047 for the gap finder): results looked on-topic for
-most terms, but "Hessian matrix convexity" returned the soldiers and "level set contour plot" returned contour-plot software pages;
-the model's queries are not always better than the term alone. The 429 and 5xx paths were never hit live. Result quality was not judged and snippets were not
-checked against the lecture.
+**What the live comparison showed (Oct 22, 3 modes, 9 + 8 gaps of one lecture):**
+- Bare terms worked best for clear terms ("level set", "condition number"); an ambiguous term ("x star") returned boats and a finance site.
+- Title mode drifted toward the other topics of the section (e.g. "level set" + title returned Hessian pages).
+- Model queries gave mostly on-topic results for all 8 gaps, but sometimes over-specify ("level set contour plot" returned contour-plot
+  software, "condition number convergence speed" narrowed to one aspect). "Hessian matrix convexity" still has the Hessian soldier page in the top 3.
+- Adding one field word to an ambiguous term did not fix it: "x star optimization" returned Star Citizen, MasterCraft and a game calculator.
+
+**Known weakness (backlog S3-1 T10):** tighten the prompt so the query is the term plus at most ONE word naming the lecture's field.
+
+**Search provider:** S0-6 (is a third-party search API allowed?) is still waiting for the organizers' answer. The provider is a setting
+(`SEARCH_PROVIDER` / `DEFAULT_PROVIDER` in `search_config.py`); a second provider is one more class in `enrich.py` next to `TavilyProvider`.
+
+**Epic 3 status:** done. Proven live: Tavily reply format, latency (1.2-2.8 s), 1 credit per basic search, credits from `usage`, cap,
+cache (a second run makes 0 provider calls), model-written queries. **Not proven live:** the 429 and 5xx paths, and the content quality of
+the results (not judged, not checked against the lecture).
 
 ## How sources work
 

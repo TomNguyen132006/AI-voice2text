@@ -98,6 +98,8 @@ goal, then "Done when" bullets.
 - **S3-3 Search cache**: cache results by query (save credits on re-runs).
 - **S3-4 Search cap**: max searches per lecture.
   - Default cap (e.g. 15) configurable
+- **S3-1 T10 (added Oct 22) Tighter search query**: change the gap-finder prompt so `query` = the term plus at most ONE word naming the lecture's field
+  (e.g. "level set", "Hessian matrix"); model queries over-specify ("level set contour plot"), and "x star optimization" still returns boats/games.
 
 ## Epic 4 — Writing notes and slides (Oct 23)
 

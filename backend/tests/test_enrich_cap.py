@@ -28,6 +28,8 @@ def env(tmp_path):
 def run(env, provider=None, **kw):
     storage, cache = env
     provider = provider or FakeProvider()
+    if "with_title" not in kw:
+        kw.setdefault("mode", "title")  # these tests are about cap and cache mechanics; queries "<term> Title n"
     return enrich.search_for_gaps("job_s4", storage, provider=provider, cache=cache, **kw), provider
 
 
@@ -37,7 +39,7 @@ def test_round_robin_order():
 
 
 def test_query_is_term_plus_section_title_or_term_alone(env):
-    report, p = run(env)
+    report, p = run(env, mode="title")
     assert p.calls[:3] == ["a1 Title 1", "b1 Title 2", "c1 Title 3"]
     assert report["query_mode"] == "title"
     storage, cache = env
@@ -47,7 +49,7 @@ def test_query_is_term_plus_section_title_or_term_alone(env):
 
 
 def test_config_defaults():
-    assert cfg.SEARCH_QUERY_MODE == "title" and cfg.SEARCH_QUERY_WITH_TITLE is True and cfg.SEARCH_CAP_PER_JOB == 15
+    assert cfg.SEARCH_QUERY_MODE == "model" and cfg.SEARCH_QUERY_WITH_TITLE is False and cfg.SEARCH_CAP_PER_JOB == 15
 
 
 def test_cap_is_respected_exactly_and_skipped_are_listed(env):
@@ -184,6 +186,8 @@ def test_cache_key_uses_the_final_query_text(env):
 def test_unknown_mode_is_refused_and_env_and_old_boolean_still_work(env, monkeypatch):
     with pytest.raises(ValueError):
         run(env, mode="bogus")
+    storage, cache = env
+    assert enrich.search_for_gaps("job_s4", storage, provider=FakeProvider(), cache=cache)["query_mode"] == "model"  # default
     monkeypatch.setenv("SEARCH_QUERY_MODE", "term")
-    assert run(env)[0]["query_mode"] == "term"
+    assert enrich.search_for_gaps("job_s4", storage, provider=FakeProvider(), cache=cache)["query_mode"] == "term"
     assert run(env, with_title=True)[0]["query_mode"] == "title"

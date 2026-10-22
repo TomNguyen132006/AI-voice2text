@@ -23,6 +23,6 @@ SEARCH_CACHE_TTL_DAYS = 7  # a cached answer older than this is fetched again
 SEARCH_CAP_PER_JOB = 15  # real provider calls per job; cache hits do not count
 # What is searched for each gap: "term" = the term alone, "title" = "<term> <section title>",
 # "model" = the query Super wrote in gaps.json (the term when the gap has none).
-SEARCH_QUERY_MODE = "title"
+SEARCH_QUERY_MODE = "model"
 QUERY_MODES = ("term", "title", "model")
 SEARCH_QUERY_WITH_TITLE = SEARCH_QUERY_MODE == "title"  # old name, kept as a read-only alias

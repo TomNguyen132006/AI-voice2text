@@ -133,6 +133,12 @@ def test_llm_error_gives_empty_and_flag():
     assert r.items == [] and r.info["flagged"] == "llm_error"
 
 
+def leaked_from_other_sections(payload: dict, section) -> list[str]:
+    """Segment ids or texts of OTHER sections found anywhere in the payload (lecture_titles is the only allowed exception)."""
+    rest = json.dumps({k: v for k, v in payload.items() if k != "lecture_titles"})
+    return [x for seg in SEGS if seg.id not in section.segment_ids for x in (seg.id, seg.text) if x in rest]
+
+
 def test_each_call_sees_only_its_own_section():
     seen = {}
 
@@ -146,10 +152,10 @@ def test_each_call_sees_only_its_own_section():
     assert [s["id"] for s in seen["sec_01"]["segments"]] == ["seg_0000", "seg_0001"]
     assert [s["id"] for s in seen["sec_02"]["segments"]] == ["seg_0002", "seg_0003"]
     assert seen["sec_01"]["title"] == "Hessian Basics"
-    assert "eigenvalues" not in json.dumps(seen["sec_01"]["segments"])
-    assert "Hessian" not in json.dumps(seen["sec_02"]["segments"])
     # only the titles of all sections are shared, to show the subject of the whole lecture
     assert seen["sec_02"]["lecture_titles"] == ["Hessian Basics", "Descent"]
+    for sec in SECS:
+        assert leaked_from_other_sections(seen[sec.id], sec) == []
 
 
 def test_gaps_job_saves_files_and_report_numbers(tmp_path):
@@ -286,3 +292,19 @@ def test_report_counts_gaps_whose_query_was_dropped():
 
 def test_prompt_asks_for_a_short_query_about_the_whole_lecture():
     assert '"query"' in gaps.SYSTEM_PROMPT and "3-7 words" in gaps.SYSTEM_PROMPT and "lecture_titles" in gaps.SYSTEM_PROMPT
+
+
+def test_a_leaked_segment_of_another_section_is_caught(monkeypatch):
+    real = gaps._user_message
+
+    def leaky(section, segments, lecture_titles=None):  # adds a hint with a segment of the other section
+        data = json.loads(real(section, segments, lecture_titles))
+        other = next(s for s in SEGS if s.id not in section.segment_ids)
+        data["context"] = {"id": other.id, "text": other.text}
+        return json.dumps(data)
+
+    seen = {}
+    monkeypatch.setattr(gaps, "_user_message", leaky)
+    gaps.find_gaps(SEGS, SECS, job_id="job_g1", client=FakeClient(lambda k, n: seen.setdefault(n, payload_of(k)) and "[]"))
+    leaks = [leaked_from_other_sections(p, sec) for p, sec in zip(seen.values(), SECS)]
+    assert all(leaks), leaks  # every call is flagged
