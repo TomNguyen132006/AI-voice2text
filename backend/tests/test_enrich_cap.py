@@ -39,15 +39,15 @@ def test_round_robin_order():
 def test_query_is_term_plus_section_title_or_term_alone(env):
     report, p = run(env)
     assert p.calls[:3] == ["a1 Title 1", "b1 Title 2", "c1 Title 3"]
-    assert report["query_with_title"] is True
+    assert report["query_mode"] == "title"
     storage, cache = env
     p2 = FakeProvider()
-    enrich.search_for_gaps("job_s4", storage, provider=p2, cache=SearchCache(cache.dir / "other"), with_title=False)
+    enrich.search_for_gaps("job_s4", storage, provider=p2, cache=SearchCache(cache.dir / "other"), mode="term")
     assert p2.calls[:3] == ["a1", "b1", "c1"]
 
 
 def test_config_defaults():
-    assert cfg.SEARCH_QUERY_WITH_TITLE is True and cfg.SEARCH_CAP_PER_JOB == 15
+    assert cfg.SEARCH_QUERY_MODE == "title" and cfg.SEARCH_QUERY_WITH_TITLE is True and cfg.SEARCH_CAP_PER_JOB == 15
 
 
 def test_cap_is_respected_exactly_and_skipped_are_listed(env):
@@ -151,3 +151,39 @@ def test_report_sums_provider_credits_and_skips_cache_hits(env):
 def test_report_has_no_credits_when_the_provider_gives_none(env):
     report, _ = run(env)
     assert report["credits_reported"] is None and report["max_response_sec"] is None
+
+
+MODEL_GAPS = [
+    {"section_id": "sec_01", "term": "x star", "reason": "r", "query": "optimal point x* minimizer"},
+    {"section_id": "sec_02", "term": "level set", "reason": "r"},  # no query: the term is used
+]
+
+
+@pytest.mark.parametrize("mode,expected", [
+    ("term", ["x star", "level set"]),
+    ("title", ["x star Title 1", "level set Title 2"]),
+    ("model", ["optimal point x* minimizer", "level set"]),
+])
+def test_each_query_mode_builds_the_expected_query(env, mode, expected):
+    storage, cache = env
+    save_json(job_key("job_s4", "gaps.json"), MODEL_GAPS, storage)
+    report, p = run(env, mode=mode)
+    assert p.calls == expected and report["query_mode"] == mode
+
+
+def test_cache_key_uses_the_final_query_text(env):
+    storage, cache = env
+    save_json(job_key("job_s4", "gaps.json"), MODEL_GAPS, storage)
+    run(env, mode="model")
+    report, p = run(env, mode="model")           # same final queries: all hits
+    assert p.calls == [] and report["cache_hits"] == 2
+    report, p = run(env, mode="term")            # "level set" is the same final text in both modes: hit
+    assert p.calls == ["x star"] and report["cache_hits"] == 1
+
+
+def test_unknown_mode_is_refused_and_env_and_old_boolean_still_work(env, monkeypatch):
+    with pytest.raises(ValueError):
+        run(env, mode="bogus")
+    monkeypatch.setenv("SEARCH_QUERY_MODE", "term")
+    assert run(env)[0]["query_mode"] == "term"
+    assert run(env, with_title=True)[0]["query_mode"] == "title"

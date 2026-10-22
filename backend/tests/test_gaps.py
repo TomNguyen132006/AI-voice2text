@@ -146,8 +146,10 @@ def test_each_call_sees_only_its_own_section():
     assert [s["id"] for s in seen["sec_01"]["segments"]] == ["seg_0000", "seg_0001"]
     assert [s["id"] for s in seen["sec_02"]["segments"]] == ["seg_0002", "seg_0003"]
     assert seen["sec_01"]["title"] == "Hessian Basics"
-    assert "eigenvalues" not in json.dumps(seen["sec_01"])
-    assert "Hessian" not in json.dumps(seen["sec_02"])
+    assert "eigenvalues" not in json.dumps(seen["sec_01"]["segments"])
+    assert "Hessian" not in json.dumps(seen["sec_02"]["segments"])
+    # only the titles of all sections are shared, to show the subject of the whole lecture
+    assert seen["sec_02"]["lecture_titles"] == ["Hessian Basics", "Descent"]
 
 
 def test_gaps_job_saves_files_and_report_numbers(tmp_path):
@@ -254,3 +256,33 @@ def test_term_check_folds_plurals_like_the_dedupe():
     assert [i["term"] for i in result.items] == ["Hessian", "gradients"]
     assert result.report["dropped"][0]["term"] == "Jacobians"
     assert result.report["dropped"][0]["reason"].startswith("term_not_in_section")
+
+
+def with_query(query, term="Hessian matrix"):
+    return {**item(term), "query": query}
+
+
+@pytest.mark.parametrize("given,expected", [
+    ("hessian matrix optimization", "hessian matrix optimization"),   # present
+    (None, None), ("", None), ("   ", None), (42, None),                # missing / empty / not text
+    ("x" * 81, None), ("x" * 80, "x" * 80),                             # length limit is 80
+    (r'"x star" $x^{*}$ \lambda_1 minimizer', "x star x* lambda1 minimizer"),  # quotes and LaTeX removed
+])
+def test_query_is_kept_only_when_usable(given, expected):
+    entry = item("Hessian matrix")
+    if given is not None:
+        entry["query"] = given
+    r, _ = one(lambda k, n: reply(entry))
+    assert r.items[0].get("query") == expected
+    assert set(r.items[0]) >= {"section_id", "term", "reason"}  # required shape unchanged
+    assert r.info["flagged"] is None and r.info["dropped"] == []  # a bad query never drops the gap
+
+
+def test_report_counts_gaps_whose_query_was_dropped():
+    result = run_multi(["the Hessian and the gradient"], {"sec_01": ["Hessian", "gradient"]})
+    assert [d["term"] for d in result.report["queries_dropped"]] == ["Hessian", "gradient"]  # run_multi gives no query
+    assert "query" not in result.items[0]
+
+
+def test_prompt_asks_for_a_short_query_about_the_whole_lecture():
+    assert '"query"' in gaps.SYSTEM_PROMPT and "3-7 words" in gaps.SYSTEM_PROMPT and "lecture_titles" in gaps.SYSTEM_PROMPT

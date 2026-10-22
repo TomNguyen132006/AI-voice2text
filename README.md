@@ -349,6 +349,10 @@ After validation, a term (lowercase, trailing plural "s" folded: "gradients" = "
 sections is kept only in the section where it is said most often (tie: the earliest); the others are listed in
 `gaps_report.json` as `duplicate_across_sections`. Any LaTeX or markup characters in a `reason` are stripped in code.
 **The `reason` is a note for the search and the writer. It is not a `Statement` and the judge does not check it.**
+Each gap may also carry an optional `query` (S3-1 T9): a web search query of 3-7 words written by Super for the subject of the whole
+lecture (the prompt shows the titles of all sections as `lecture_titles`). It is additive: the required shape stays
+`{section_id, term, reason}`. A missing, empty, non-text or over-80-character query is dropped (the term is used instead) and listed
+in `gaps_report.json` under `queries_dropped`; quotes and LaTeX characters are stripped. It is a search hint, not a `Statement`, and is not judged.
 Repeat a run (from `backend/`): `python -m gaps <job_id>` (sections one at a time, saves both files, prints the
 table and the cost; about $0.004 for 3 sections).
 
@@ -375,7 +379,7 @@ section that only says "Hessians".
 | `SEARCH_MAX_RETRIES` | 2 | timeouts, connection errors, 5xx (waits 1 s, 2 s). 4xx: no retry. 429: one retry after `Retry-After` (max 30 s). 432/433: `SearchError` kind `quota`, no retry |
 | `SEARCH_CACHE_TTL_DAYS` | 7 | cache in `backend/.data/search_cache/` (git-ignored; shared by all jobs; lost when the server's disk resets) |
 | `SEARCH_CAP_PER_JOB` | 15 | real provider calls per job; cache hits do not count; a failed search counts |
-| `SEARCH_QUERY_WITH_TITLE` | `True` | query = term + section title; `False` = the term alone (to be decided after a live comparison) |
+| `SEARCH_QUERY_MODE` (env var wins) | `"title"` | `"term"` = the term alone, `"title"` = term + section title, `"model"` = the `query` Super wrote (the term if the gap has none). Default to be decided by Tom after the live comparison. `SEARCH_QUERY_WITH_TITLE` stays as a read-only alias |
 
 Key: `TAVILY_API_KEY` in `.env` (name in `.env.example`, never in git). Tavily request: `POST https://api.tavily.com/search`,
 `Authorization: Bearer <key>`, body `{query, search_depth, max_results}` with answer/raw content/images off;
@@ -395,7 +399,9 @@ has a url; a second `python -m enrich` makes 0 provider calls (9 cache hits). Ca
 so all its entries then say `cached: true` (the first run's `cached: false` is gone).
 **Not proven yet:** whether "term + section title" is the better query (bare "x star" returns boats and a finance site; the
 title version returns steepest-descent pages, but "level set" + title drifts to Hessian pages): Tom decides
-`SEARCH_QUERY_WITH_TITLE`. The 429 and 5xx paths were never hit live. Result quality was not judged and snippets were not
+`SEARCH_QUERY_MODE`. Live run of mode `model` (Oct 22, 8 gaps, 8 credits, $0.0047 for the gap finder): results looked on-topic for
+most terms, but "Hessian matrix convexity" returned the soldiers and "level set contour plot" returned contour-plot software pages;
+the model's queries are not always better than the term alone. The 429 and 5xx paths were never hit live. Result quality was not judged and snippets were not
 checked against the lecture.
 
 ## How sources work

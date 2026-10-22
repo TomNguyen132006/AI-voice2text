@@ -1,6 +1,7 @@
 """Web search configuration (S3-2 to S3-4): the ONE place with provider, limits, timeouts and cache settings.
 
-The provider can be overridden with the environment variable SEARCH_PROVIDER ("tavily" or "fake").
+The provider can be overridden with the environment variable SEARCH_PROVIDER ("tavily" or "fake"),
+the query mode with SEARCH_QUERY_MODE ("term", "title" or "model").
 The API key is NOT here: it is read from the environment (TAVILY_API_KEY for Tavily).
 """
 DEFAULT_PROVIDER = "tavily"  # "tavily" | "fake" (fake = no network, for tests and dry runs)
@@ -20,4 +21,8 @@ RETRY_AFTER_CAP_SEC = 30.0  # never wait longer than this, even if Retry-After s
 
 SEARCH_CACHE_TTL_DAYS = 7  # a cached answer older than this is fetched again
 SEARCH_CAP_PER_JOB = 15  # real provider calls per job; cache hits do not count
-SEARCH_QUERY_WITH_TITLE = True  # query = "<term> <section title>"; False = the term alone
+# What is searched for each gap: "term" = the term alone, "title" = "<term> <section title>",
+# "model" = the query Super wrote in gaps.json (the term when the gap has none).
+SEARCH_QUERY_MODE = "title"
+QUERY_MODES = ("term", "title", "model")
+SEARCH_QUERY_WITH_TITLE = SEARCH_QUERY_MODE == "title"  # old name, kept as a read-only alias

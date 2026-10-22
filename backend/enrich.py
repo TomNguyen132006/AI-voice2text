@@ -257,9 +257,19 @@ def round_robin(gaps: list[dict], sections) -> list[dict]:
     return [q[r] for r in range(max((len(q) for q in queues), default=0)) for q in queues if r < len(q)]
 
 
+def build_query(gap: dict, mode: str, titles: dict) -> str:
+    """The text searched (and cached) for one gap."""
+    term = gap["term"]
+    if mode == "title":
+        return f"{term} {titles.get(gap['section_id'], '')}".strip()
+    if mode == "model":
+        return gap.get("query") or term
+    return term
+
+
 def search_for_gaps(
     job_id: str, storage=None, *, provider=None, cache=None, cap: int | None = None,
-    with_title: bool | None = None,
+    mode: str | None = None, with_title: bool | None = None,
 ) -> dict:
     """Search every gap of the job (gaps.json), within the cap on real provider calls. Writes search.json
     (fresh for this run) and search_report.json; returns the report. A search that reached the provider
@@ -267,19 +277,22 @@ def search_for_gaps(
     provider = provider or get_provider()
     cache = cache or SearchCache()
     cap = cfg.SEARCH_CAP_PER_JOB if cap is None else cap
-    with_title = cfg.SEARCH_QUERY_WITH_TITLE if with_title is None else with_title
+    if mode is None:  # with_title is the old boolean argument
+        mode = (os.getenv("SEARCH_QUERY_MODE") or cfg.SEARCH_QUERY_MODE).strip().lower() if with_title is None             else ("title" if with_title else "term")
+    if mode not in cfg.QUERY_MODES:
+        raise ValueError(f"unknown search query mode {mode!r}; use one of {cfg.QUERY_MODES}")
     sections = load_sections(job_id, storage)
     titles = {s.id: s.title for s in sections}
     gaps = load_json(job_key(job_id, "gaps.json"), storage)
     save_json(job_key(job_id, "search.json"), [], storage)
 
-    report = {"job_id": job_id, "provider": provider.name, "cap": cap, "query_with_title": with_title,
+    report = {"job_id": job_id, "provider": provider.name, "cap": cap, "query_mode": mode,
               "max_results": cfg.SEARCH_MAX_RESULTS, "gaps_total": len(gaps), "searches_made": 0,
               "cache_hits": 0, "provider_calls": 0, "credits_reported": None,
               "max_response_sec": None, "skipped_cap": [], "errors": []}
     for gap in round_robin(gaps, sections):
         term, sid = gap["term"], gap["section_id"]
-        query = f"{term} {titles.get(sid, '')}".strip() if with_title else term
+        query = build_query(gap, mode, titles)
         room = report["provider_calls"] < cap
         try:
             outcome = search_outcome(
@@ -310,7 +323,7 @@ def search_for_gaps(
 
 def format_report(report: dict) -> str:
     lines = [f"job {report['job_id']}: provider {report['provider']}, cap {report['cap']}, "
-             f"query with title: {report['query_with_title']}",
+             f"query mode: {report['query_mode']}",
              f"{report['searches_made']} of {report['gaps_total']} gaps searched, "
              f"{report['provider_calls']} provider calls, {report['cache_hits']} cache hits, "
              f"{len(report['skipped_cap'])} skipped (cap), {len(report['errors'])} errors, "

@@ -1,17 +1,19 @@
 """Gap finder (S3-1): Super lists, per section, the terms a beginner would need explained more.
 
 Per section the model sees only the section title and that section's cleaned segments, and
-answers [{"section_id", "term", "reason"}]. This code checks every item: the section_id must be
+answers [{"section_id", "term", "reason"}] plus an optional "query" (a search hint). This code checks every item: the section_id must be
 the one asked, every word of the term must occur in that section's text, duplicates and items
 over the maximum are dropped. A term found in several sections is kept only in the section where
 it is said most often. Dropped items are listed in the report, never silently lost.
 Gap items stay plain dicts (no schemas.py change). The "reason" is a plain-text note for the search
-and the writer; it is NOT a Statement and the judge does not check it.
+and the writer; it is NOT a Statement and the judge does not check it. The same holds for "query": an optional
+web search hint of 3-7 words, additive, missing/empty/over 80 characters -> the field is dropped (the search
+uses the term) and counted in gaps_report.json ("queries_dropped").
 
 Usage (from backend/):  python -m gaps <job_id>
 
 Files per job:
-    jobs/{id}/gaps.json          list of {section_id, term, reason}
+    jobs/{id}/gaps.json          list of {section_id, term, reason} (+ "query" when the model gave a usable one)
     jobs/{id}/gaps_report.json   dropped items with reasons, flagged sections, calls, tokens, cost
 """
 import json
@@ -30,11 +32,13 @@ ROLE = "super"
 STAGE = "gap_finder"
 
 GAPS_MAX_PER_SECTION = 5
+QUERY_MAX_CHARS = 80
 # Super's thinking counts as output tokens. A truncated answer is retried once with double.
 MAX_TOKENS = 16000
 
 SYSTEM_PROMPT = """You help a beginner study a university lecture. The user message is JSON: one section of the lecture,
 with its "section_id", its "title" and its "segments" as [{"id", "start", "text"}].
+"lecture_titles" lists the titles of all sections of the whole lecture, only to show its subject area.
 Find the terms or examples in THIS section that a beginner would need explained more.
 Rules:
 - Choose a term only if the lecturer uses it without explaining it, or explains it only briefly. Skip basic words the lecture already defines.
@@ -42,8 +46,9 @@ Rules:
 - "reason" is one plain-text sentence on why a beginner needs this explained. No LaTeX, no math markup, no dollar signs or backslashes.
 - Give at most %d items, the most important first. An empty list is allowed if nothing needs more explanation.
 - "section_id" must be the section_id from the user message.
+- "query" is a web search query of 3-7 words that identifies the term in the subject area of the whole lecture (see "lecture_titles"), not in the other topics of this section. Plain text, no quotes, no LaTeX.
 Reply with ONLY a JSON list:
-[{"section_id": "<same section_id>", "term": "<term>", "reason": "<one sentence>"}]
+[{"section_id": "<same section_id>", "term": "<term>", "reason": "<one sentence>", "query": "<3-7 words>"}]
 No other text, no code fence."""
 
 
@@ -92,11 +97,20 @@ def clean_reason(text: str) -> str:
     return " ".join(_MARKUP.sub("", text).split())
 
 
-def _user_message(section: Section, segments: list[Segment]) -> str:
+def clean_query(value) -> str | None:
+    """A usable search query (plain text, one line, at most QUERY_MAX_CHARS) or None."""
+    if not isinstance(value, str):
+        return None
+    text = " ".join(_MARKUP.sub("", value).replace('"', "").split())
+    return text if text and len(text) <= QUERY_MAX_CHARS else None
+
+
+def _user_message(section: Section, segments: list[Segment], lecture_titles: list[str] | None = None) -> str:
     return json.dumps(
         {
             "section_id": section.id,
             "title": section.title,
+            "lecture_titles": lecture_titles or [section.title],
             "segments": [{"id": s.id, "start": round(s.start, 1), "text": s.text} for s in segments],
         },
         ensure_ascii=False,
@@ -104,7 +118,8 @@ def _user_message(section: Section, segments: list[Segment]) -> str:
 
 
 def _validate(parsed: list, section: Section, segments: list[Segment], max_items: int) -> tuple[list[dict], list[dict]]:
-    """(kept, dropped). dropped = [{"term", "reason"}]; the first rule an item breaks is its reason."""
+    """(kept, dropped). dropped = [{"term", "reason"}]; the first rule an item breaks is its reason.
+    A kept item has a "query" only when the model's was usable (see clean_query)."""
     known = {_fold(w) for w in _words(" ".join(s.text for s in segments))}  # same folding as normalize_term
     kept, dropped, seen = [], [], set()
     for item in parsed:
@@ -121,7 +136,11 @@ def _validate(parsed: list, section: Section, segments: list[Segment], max_items
             dropped.append({"term": shown, "reason": "duplicate"})
         else:
             seen.add(normalize_term(term))
-            kept.append({"section_id": section.id, "term": term.strip(), "reason": clean_reason(why)})
+            gap = {"section_id": section.id, "term": term.strip(), "reason": clean_reason(why)}
+            kept.append(gap)
+            query = clean_query(item.get("query"))
+            if query is not None:
+                gap["query"] = query
     for item in kept[max_items:]:
         dropped.append({"term": item["term"], "reason": "over_max"})
     return kept[:max_items], dropped
@@ -129,13 +148,13 @@ def _validate(parsed: list, section: Section, segments: list[Segment], max_items
 
 def gaps_for_section(
     section: Section, segments: list[Segment], *, job_id: str, client=None,
-    max_items: int = GAPS_MAX_PER_SECTION,
+    max_items: int = GAPS_MAX_PER_SECTION, lecture_titles: list[str] | None = None,
 ) -> SectionGaps:
     """One question to Super (plus one retry when the answer is cut off or unusable)."""
     client = client or llm.make_client()
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT % max_items},
-        {"role": "user", "content": _user_message(section, segments)},
+        {"role": "user", "content": _user_message(section, segments, lecture_titles)},
     ]
     info = {"section_id": section.id, "title": section.title, "segments": len(segments),
             "flagged": None, "dropped": [], "attempts": [], "calls": 0, "prompt_tokens": 0,
@@ -217,6 +236,8 @@ def build_result(job_id: str, per_section: list[SectionGaps]) -> GapsResult:
         "flagged": [{"section_id": g.section_id, "reason": g.info["flagged"]}
                     for g in per_section if g.info["flagged"] and not g.items],
         "dropped": [{"section_id": g.section_id, **d} for g in per_section for d in g.info["dropped"]],
+        "queries_dropped": [{"section_id": g.section_id, "term": i["term"]}
+                            for g in per_section for i in g.items if "query" not in i],
         "calls": sum(g.info["calls"] for g in per_section),
         "prompt_tokens": sum(g.info["prompt_tokens"] for g in per_section),
         "completion_tokens": sum(g.info["completion_tokens"] for g in per_section),
@@ -231,7 +252,8 @@ def find_gaps(segments: list[Segment], sections: list[Section], *, job_id: str, 
     client = client or (llm.make_client() if sections else None)
     per_section = for_each_section(
         segments, sections,
-        lambda section, segs: gaps_for_section(section, segs, job_id=job_id, client=client),
+        lambda section, segs: gaps_for_section(
+            section, segs, job_id=job_id, client=client, lecture_titles=[s.title for s in sections]),
     )
     return build_result(job_id, per_section)
 
