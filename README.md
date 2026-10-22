@@ -388,9 +388,15 @@ Run: `cd backend && python -m enrich <job_id>` (`SEARCH_PROVIDER=fake` works end
 `python -m enrich` overwrites `search.json` for that run, while `search()` appends. Notes written from an earlier run
 may point to URLs that are no longer in the file, so regenerate the notes after re-running enrich.
 
-**Not proven yet:** everything above is tested with a fake HTTP client and a fake provider (286 tests). No live Tavily search
-has been made, so the real response shape, the real latency, the quality of "term + section title" queries and the
-credit cost are unchecked.
+**Proven by live runs (Oct 22, Tavily, basic depth):** the real reply matches the adapter (`results[].title/url/content`, plus
+`usage.credits` and `response_time`); one search takes about 1.3-2.8 s (timeout is 20 s); one basic search = 1 credit, and the
+credits summed from `usage` equal our own count; on job_e2e_20261019_130712, 9 gaps -> 9 provider calls, 45 results, every result
+has a url; a second `python -m enrich` makes 0 provider calls (9 cache hits). Caveat: the second run overwrites `search.json`,
+so all its entries then say `cached: true` (the first run's `cached: false` is gone).
+**Not proven yet:** whether "term + section title" is the better query (bare "x star" returns boats and a finance site; the
+title version returns steepest-descent pages, but "level set" + title drifts to Hessian pages): Tom decides
+`SEARCH_QUERY_WITH_TITLE`. The 429 and 5xx paths were never hit live. Result quality was not judged and snippets were not
+checked against the lecture.
 
 ## How sources work
 
