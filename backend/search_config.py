@@ -11,6 +11,7 @@ TAVILY_KEY_ENV = "TAVILY_API_KEY"
 SEARCH_MAX_RESULTS = 5
 SEARCH_DEPTH = "basic"  # Tavily: basic = 1 credit per search, advanced = 2
 SEARCH_TIMEOUT_SEC = 20.0
+SEARCH_INCLUDE_USAGE = True  # Tavily then reports the credits of each search; summed in search_report.json
 
 SEARCH_MAX_RETRIES = 2  # after the first call, for timeouts, connection errors and 5xx
 RETRY_WAIT_BASE_SEC = 1.0  # wait 1 s, then 2 s

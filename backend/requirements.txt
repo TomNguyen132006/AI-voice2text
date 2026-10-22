@@ -6,3 +6,4 @@ pydantic==2.13.5
 python-multipart==0.0.32
 numpy==2.5.3
 boto3==1.43.113
+httpx2==2.13.1  # used directly by enrich.py (also installed with openai)

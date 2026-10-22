@@ -385,6 +385,8 @@ Files per job: `jobs/{id}/search.json` (one entry per search, cache hits include
 what the judge will compare web links against) and `jobs/{id}/search_report.json` (searches made, cache hits, provider calls,
 `skipped_cap`, errors). Order of searches: first gap of every section, then the second of every section, and so on.
 Run: `cd backend && python -m enrich <job_id>` (`SEARCH_PROVIDER=fake` works end to end).
+`python -m enrich` overwrites `search.json` for that run, while `search()` appends. Notes written from an earlier run
+may point to URLs that are no longer in the file, so regenerate the notes after re-running enrich.
 
 **Not proven yet:** everything above is tested with a fake HTTP client and a fake provider (286 tests). No live Tavily search
 has been made, so the real response shape, the real latency, the quality of "term + section title" queries and the

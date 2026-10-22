@@ -53,7 +53,8 @@ def test_success_maps_content_to_snippet_and_sends_the_documented_request():
     assert call["url"] == "https://api.tavily.com/search" and call["timeout"] == cfg.SEARCH_TIMEOUT_SEC
     assert call["headers"]["Authorization"] == f"Bearer {KEY}"
     assert call["json"] == {"query": "gradient descent", "search_depth": "basic", "max_results": 5,
-                            "include_answer": False, "include_raw_content": False, "include_images": False}
+                            "include_answer": False, "include_raw_content": False, "include_images": False,
+                            "include_usage": True}
 
 
 def test_result_without_url_is_dropped_and_url_is_kept_exactly():
@@ -192,3 +193,16 @@ def test_get_provider_default_env_and_unknown(monkeypatch):
     assert enrich.get_provider().name == "fake"
     with pytest.raises(ValueError):
         enrich.get_provider("brave")
+
+
+def test_usage_and_response_time_are_kept_in_last_meta():
+    def responder(n):
+        return httpx.Response(200, json={"results": [], "usage": {"credits": 1}, "response_time": 0.8},
+                              request=httpx.Request("POST", cfg.TAVILY_URL))
+
+    provider, _ = tavily(responder)
+    provider.search("q", 5, "basic")
+    assert provider.last_meta == {"credits": 1, "response_time": 0.8}
+    provider2, _ = tavily(lambda n: reply())
+    provider2.search("q", 5, "basic")
+    assert provider2.last_meta is None  # no usage in the reply: nothing invented

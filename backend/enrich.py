@@ -48,6 +48,7 @@ class TavilyProvider:
 
     def __init__(self, client=None):
         self._client = client
+        self.last_meta: dict | None = None  # {"credits", "response_time"} of the last search, None if absent
 
     def _http(self):
         if self._client is None:
@@ -61,12 +62,17 @@ class TavilyProvider:
         body = {
             "query": query, "search_depth": depth, "max_results": max_results,
             "include_answer": False, "include_raw_content": False, "include_images": False,
+            "include_usage": cfg.SEARCH_INCLUDE_USAGE,
         }
         headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
+        self.last_meta = None
         data = self._post(body, headers)
         results = data.get("results") if isinstance(data, dict) else None
         if not isinstance(results, list):
             raise SearchError("reply has no 'results' list", kind="bad_reply")
+        usage = data.get("usage") if isinstance(data.get("usage"), dict) else {}
+        if usage.get("credits") is not None or data.get("response_time") is not None:
+            self.last_meta = {"credits": usage.get("credits"), "response_time": data.get("response_time")}
         out = []
         for r in results:
             url = r.get("url") if isinstance(r, dict) else None
@@ -199,6 +205,7 @@ class SearchCache:
 class SearchOutcome:
     results: list[dict]
     cached: bool
+    meta: dict | None = None  # provider facts of a real search (credits, response_time); None for a cache hit
 
 
 def record_search(job_id: str, entry: dict, storage=None) -> None:
@@ -234,7 +241,7 @@ def search_outcome(
             "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "cached": cached, "results": results,
         }, storage)
-    return SearchOutcome(results, cached)
+    return SearchOutcome(results, cached, None if cached else getattr(provider, "last_meta", None))
 
 
 def search(query: str, *, job_id=None, term=None, section_id=None, **kwargs) -> list[dict]:
@@ -268,7 +275,8 @@ def search_for_gaps(
 
     report = {"job_id": job_id, "provider": provider.name, "cap": cap, "query_with_title": with_title,
               "max_results": cfg.SEARCH_MAX_RESULTS, "gaps_total": len(gaps), "searches_made": 0,
-              "cache_hits": 0, "provider_calls": 0, "skipped_cap": [], "errors": []}
+              "cache_hits": 0, "provider_calls": 0, "credits_reported": None,
+              "max_response_sec": None, "skipped_cap": [], "errors": []}
     for gap in round_robin(gaps, sections):
         term, sid = gap["term"], gap["section_id"]
         query = f"{term} {titles.get(sid, '')}".strip() if with_title else term
@@ -291,6 +299,11 @@ def search_for_gaps(
             report["cache_hits"] += 1
         else:
             report["provider_calls"] += 1
+            meta = outcome.meta or {}
+            if meta.get("credits") is not None:
+                report["credits_reported"] = (report["credits_reported"] or 0) + meta["credits"]
+            if meta.get("response_time") is not None:
+                report["max_response_sec"] = max(report["max_response_sec"] or 0, meta["response_time"])
     save_json(job_key(job_id, "search_report.json"), report, storage)
     return report
 
@@ -300,7 +313,8 @@ def format_report(report: dict) -> str:
              f"query with title: {report['query_with_title']}",
              f"{report['searches_made']} of {report['gaps_total']} gaps searched, "
              f"{report['provider_calls']} provider calls, {report['cache_hits']} cache hits, "
-             f"{len(report['skipped_cap'])} skipped (cap), {len(report['errors'])} errors"]
+             f"{len(report['skipped_cap'])} skipped (cap), {len(report['errors'])} errors, "
+             f"credits reported by provider: {report['credits_reported']}, slowest search: {report['max_response_sec']} s"]
     lines += [f"  skipped_cap {s['section_id']} {s['term']!r}" for s in report["skipped_cap"]]
     lines += [f"  ERROR {e['section_id']} {e['term']!r}: {e['kind']} {e['status_code'] or ''}".rstrip()
               for e in report["errors"]]

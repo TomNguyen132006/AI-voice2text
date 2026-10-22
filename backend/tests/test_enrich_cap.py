@@ -135,3 +135,19 @@ def test_job_without_gaps_searches_nothing(env):
 def test_format_report_mentions_numbers_and_skipped(env):
     text = enrich.format_report(run(env, cap=1)[0])
     assert "1 provider calls" in text and "skipped_cap" in text and "provider fake" in text
+
+
+def test_report_sums_provider_credits_and_skips_cache_hits(env):
+    class Metered(FakeProvider):
+        last_meta = {"credits": 1, "response_time": 0.5}
+
+    storage, cache = env
+    enrich.search("a1 Title 1", provider=FakeProvider(), cache=cache)  # one cache hit later
+    report, _ = run(env, Metered(), cap=3)
+    assert report["cache_hits"] == 1 and report["provider_calls"] == 3
+    assert report["credits_reported"] == 3 and report["max_response_sec"] == 0.5
+
+
+def test_report_has_no_credits_when_the_provider_gives_none(env):
+    report, _ = run(env)
+    assert report["credits_reported"] is None and report["max_response_sec"] is None
