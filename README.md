@@ -16,7 +16,8 @@ Built for the Nebius x NVIDIA Global AI Hackathon (track: Best Apps and Agents).
 > end-to-end entry point `python backend/run_epic2.py <transcript.json>` (clean + topic split, prints the
 > sections and the cost of the job). **Epic 3 done (Oct 22):** gap finder `gaps.py` (S3-1) and web search `enrich.py` (S3-2 wrapper, S3-3 cache,
 > S3-4 cap), both run live. Not proven live: the 429/5xx paths and the content quality of the search results.
-> **Epic 4 part 1 (Oct 22):** `validate.py` (S4-3) and the notes writer `notes.py` (S4-1, run live once). Next: Epic 5 (judge). **S4-2 done (Oct 22):** slide writer `slides.py`, run live once.
+> **Epic 4 done:** `validate.py` (S4-3), notes writer `notes.py` (S4-1), slide writer `slides.py` (S4-2) and the copy check `check_sources.py`; the notes prompt v3 is the
+> baseline. Next: Epic 5 (judge). See "Epic 4 status" below.
 > Sections marked _TBD_ are filled in as we build.
 
 ## Repo structure
@@ -477,7 +478,8 @@ Honest reading (one run, not proof of stability): the cap no longer cuts anythin
 convergence when b is small" are statements 7 and 8). Most filler is gone, but not all ("The lecturer asks how the Hessian relates to the convexity of the function").
 Web-only statements went UP (1 -> 4 in sec_01, 3 in sec_03), and one of them is the "pure quadratic = ax^2+bx+c" definition that differs from the lecture's
 meaning (judge case d, see `context/backlog.md`). Coverage is lower than v2 in sec_02 (0.67 vs 0.83) and cost is about the same as v2 (more in sec_03, which was
-the long one). One factual slip seen in sec_03: a statement calls the level set 2x+5y=0 a "plane" (it is a line in 2D); nobody has checked the statements against the lecture yet.
+the long one). Checked afterwards: a statement in sec_03 calls the level set 2x+5y=0 a "plane"; that is NOT a model slip, the lecturer says "the plane 2x plus 5y equal 0"
+(seg_0068, seg_0072, seg_0073), so the note is faithful to the lecture even though it is loose maths. Nobody has checked the other statements against the lecture yet.
 
 ## Slide writer (S4-2, `backend/slides.py`)
 
@@ -502,6 +504,28 @@ returns `{"title", "bullets": [ids], "example": id|null}`. **The model writes no
 Every bullet keeps its statement id and sources. **Not proven:** the judge has not checked the slides; retry and failure paths and the word limit with real
 output (fake client only); the pptx export (Epic 6). **Weak points seen:** the slides are only as good as the notes; with the example removed, sec_03's slide
 has only 2 bullets and none about level sets or convexity (they are in the speaker notes), because the model chose the example and the bullets from the first statements.
+
+## Copy check (`backend/check_sources.py`)
+
+`python -m check_sources <job_id>` (from `backend/`, no model, no network, exit code 1 on a failure) checks that texts, times and links were COPIED correctly:
+(a) every statement has a source; (b) every web source url (exact) and title is in `search.json`; (c) every lecture source has `segment_id`, `start`, `end` equal to the
+ORIGINAL `transcript.json`; (d) every slide bullet equals its statement in `notes.json` (text, section, sources); (e) the slide example equals the statement named by
+`example_statement_id` in `slides_report.json`, and that statement is not also a bullet. It does NOT check that a statement is true or supported by its source (the judge, Epic 5).
+Run on job_e2e_20261019_130712: a 27/27, b 8/8, c 40/40, d 8/8, e 3/3 passed. (The first run showed e failing, only because the old `slides_report.json` was made before
+`example_statement_id` existed; the report was rebuilt from the saved live results, with no model call, and `slides.json` stayed identical.)
+
+## Epic 4 status (Oct 23)
+
+| Part | Done | Proven live (job_e2e_20261019_130712, Super) | Not proven |
+|---|---|---|---|
+| S4-3 `validate.py` | yes | used by notes and slides: 15 calls, all valid at the first try | the retry after invalid JSON / schema error, the doubled-`max_tokens` retry, and the API-error branch with the real API (fake client only) |
+| S4-1 `notes.py` | yes (prompt v3 is the baseline) | 3 sections, 27 statements, times and links copied correctly (`check_sources`) | that the statements are TRUE and supported by their sources (judge, Epic 5); long sections (sec_03 coverage 0.29); behavior on other lectures |
+| S4-2 `slides.py` | yes | 3 slides, bullets keep statement id and sources, example not printed twice | slides through the judge; word limit and cap with real output beyond one run; pptx export (Epic 6) |
+| Search provider S0-6 | no | Tavily works | the organizers have not answered whether a third-party search API is allowed |
+
+**Epic 4 spend, from the call log** (`backend/.data/logs/calls.jsonl`, stages `notes_writer` and `slide_writer`): 15 calls, **$0.0412** (notes 9 calls $0.0372, slides 6 calls $0.0040), no errors, no retries.
+**Project total from the same log, all stages:** 142 calls, **$0.2276** (cleaning $0.1510, topic split $0.0232, gap finder $0.0119, notes $0.0372, slides $0.0040, smoke test $0.0003);
+a lower bound, because 2 timed-out cleaning attempts have no cost. Tavily is not in this number (credits: 26 of 1000 used before Epic 4).
 
 ## How sources work
 
