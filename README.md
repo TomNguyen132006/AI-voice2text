@@ -444,6 +444,23 @@ the lecture yet; the judge is S5-2), the guards on real bad output (only tested 
 is cut off, and long lectures. Observed weak points: the 75-segment section gave only 3 statements (thin coverage), and some statements are
 backed only by web snippets (e.g. the convexity note), not by the lecture.
 
+**Coverage rework (Oct 22, second live run, 3 Super calls, $0.0153):** the prompt now asks to cover each main idea in order and not to skip
+topics in a long section (no number); a statement with ONLY web sources must name a gap term of its section (`web_only_off_topic`, same
+normalization as `gaps.py`); at most `NOTES_MAX_SOURCES_PER_STATEMENT` (3, lecture first) sources per statement; `notes_report.json` has per
+section `coverage` (distinct cited segments / segments), `web_only` and `sources_per_statement`. Before -> after on the e2e job:
+
+| section | statements | web-only | coverage | cost | latency |
+|---|---|---|---|---|---|
+| sec_01 (14 seg) | 7 -> 10 | 1 -> 1 | 0.50 -> 0.64 | $0.0030 -> $0.0051 | 24 s |
+| sec_02 (12 seg) | 3 -> 10 | 1 -> 0 | 0.83 -> 0.83 | $0.0013 -> $0.0040 | 17 s |
+| sec_03 (75 seg) | 3 -> 10 | 1 -> 2 | 0.05 -> 0.27 | $0.0033 -> $0.0062 | 18 s |
+
+Honest reading (one run, not proof of stability): sec_03 improved (real content: gradient, Hessian of the linear example, level sets, steepest
+descent) and the guard fired where intended (1 web-only statement dropped). But the short sections got WORSE in quality: the model now goes
+segment by segment and writes filler ("The lecturer says he has prepared for the crucial example."); sec_01 and sec_02 each produced 13-15
+statements and the cap of 10 cut the LAST ones (the end of the section is lost); sec_02 lost its only web explanation; cost +100 %, latency 17-24 s.
+Open design question: cut by importance instead of by order, or ask for "one note per idea, not per sentence". Not done yet.
+
 ## How sources work
 
 Every statement in the notes and slides must have a source: a lecture moment or a web page.
