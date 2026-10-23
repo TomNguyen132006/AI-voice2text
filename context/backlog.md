@@ -158,3 +158,16 @@ goal, then "Done when" bullets.
 - **S10-3 Demo video**: public YouTube, 3 min or less, shows app, Token Factory, models.
 - **S10-4 Devpost write-up**: what / why / how, measured numbers, tool feedback.
 - **S10-5 Final checklist and submit**: Official Rules checklist, submit Oct 29 (deadline Oct 30 noon).
+
+
+## Judge test cases (Epic 5) (added Oct 22)
+Real cases from job_e2e_20261019_130712 (a lecture on optimization), described by segment id and wording because statement ids change on every notes run. Each should become a test for the judge (S5-2) and for the retry/drop rule (S5-3).
+- **(a) Lecture source does not support the claim.** A statement says "the gradient points in the direction of steepest ascent" and cites `seg_0001`. That segment only says "Be sure to make some comments about the gradient and the Hessian and the role of convexity before we see the big ... crucial example", so it mentions the gradient in passing. Expected: not supported by the lecture source (the claim is only supported by a web page, if at all).
+- **(b) Speech recognition (ASR) dropped words.** A statement says "x* = (0,0)" and cites `seg_0021`, whose text is "So the minimum point, x star, zero, of course." The speaker said "x star is zero zero of course". Expected: weakly supported / differs because of speech recognition, not "contradicts".
+- **(c) ASR error changes the meaning.** A statement says "x1^2 + b x2^2" and cites `seg_0005`, whose text says "x1 squared was bx2 squared" ("was" instead of "plus"). Expected: weakly supported / differs because of speech recognition.
+- **(d) Web statement true in general, but different from how the lecture uses the term.** A statement defines "pure quadratic" as f(x) = ax^2 + bx + c (from a web page), while the lecture means a quadratic form x^T S x with a symmetric matrix S (`seg_0005`). Expected: not a contradiction of a fact, but the judge must notice that the web definition does not match the lecture's meaning (flag, or "differs").
+
+**Notes for the judge design:**
+- For statements that are added from the web, ALSO check that they do not contradict the lecture text of the same section (not only that the web snippet says it).
+- Allow a level between "supported" and "unsupported", for example "weakly supported / differs because of speech recognition", so cases (b) and (c) are not treated as contradictions.
+- The ASR mistakes in (b) and (c) are in BOTH the original and the cleaned text (cleaning only removed "uh"; checked for seg_0005 and seg_0021), so the judge cannot fix them by reading the other version. Keep the timestamps so a human can re-listen.

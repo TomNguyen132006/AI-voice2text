@@ -461,27 +461,47 @@ segment by segment and writes filler ("The lecturer says he has prepared for the
 statements and the cap of 10 cut the LAST ones (the end of the section is lost); sec_02 lost its only web explanation; cost +100 %, latency 17-24 s.
 Open design question: cut by importance instead of by order, or ask for "one note per idea, not per sentence". Not done yet.
 
+**Idea-level prompt (Oct 22, third live run, 3 calls, $0.0144):** one note per IDEA (not per sentence), lecture order, no remarks about what the lecturer
+plans to do, no greetings or filler, a lecture segment is cited only for what it says itself (web-only claims cite the web id). `NOTES_MAX_PER_SECTION` (10) is
+only a safety net; the report has `n_generated` and `n_cut_by_cap` per section. Source limits are now `NOTES_MAX_LECTURE_SOURCES` (6) and `NOTES_MAX_WEB_SOURCES` (3).
+`web_only_off_topic` now matches word forms (`same_word_form`: lowercase, plural folded, equal or sharing the first 6 letters), so "convex" matches the term
+"convexity". Known false positive of that rule: "derivative" ~ "derivation".
+
+| section | version | generated | kept | cut by cap | web-only | coverage | sources cut | cost |
+|---|---|---|---|---|---|---|---|---|
+| sec_01 | v1 / v2 / v3 | 7 / 15 / 10 | 7 / 10 / 10 | 0 / 5 / 0 | 1 / 1 / 4 | 0.50 / 0.64 / 0.57 | 0 / 0 / 0 | $0.0030 / $0.0051 / $0.0047 |
+| sec_02 | v1 / v2 / v3 | 3 / 13 / 8 | 3 / 10 / 8 | 0 / 3 / 0 | 1 / 0 / 1 | 0.83 / 0.83 / 0.67 | 0 / 0 / 0 | $0.0013 / $0.0040 / $0.0024 |
+| sec_03 | v1 / v2 / v3 | 3 / 12 / 9 | 3 / 10 / 9 | 0 / 1 / 0 | 1 / 2 / 3 | 0.05 / 0.27 / 0.29 | 0 / 22 / 3 | $0.0033 / $0.0062 / $0.0073 |
+
+Honest reading (one run, not proof of stability): the cap no longer cuts anything and the end of sec_01 is back (the condition number = 1/b and "slow
+convergence when b is small" are statements 7 and 8). Most filler is gone, but not all ("The lecturer asks how the Hessian relates to the convexity of the function").
+Web-only statements went UP (1 -> 4 in sec_01, 3 in sec_03), and one of them is the "pure quadratic = ax^2+bx+c" definition that differs from the lecture's
+meaning (judge case d, see `context/backlog.md`). Coverage is lower than v2 in sec_02 (0.67 vs 0.83) and cost is about the same as v2 (more in sec_03, which was
+the long one). One factual slip seen in sec_03: a statement calls the level set 2x+5y=0 a "plane" (it is a line in 2D); nobody has checked the statements against the lecture yet.
+
 ## Slide writer (S4-2, `backend/slides.py`)
 
 `python -m slides <job_id>` (from `backend/`) builds one `schemas.Slide` per section FROM the validated statements in `notes.json`, and writes
 `slides.json` and `slides_report.json`. Super sees the section title and that section's statements as `[{id, text}]` (no sources, no urls) and
 returns `{"title", "bullets": [ids], "example": id|null}`. **The model writes no claim.** Code does the rest:
-- `bullets` = copies of the chosen `Statement` objects, text and sources unchanged (a test checks this).
-- `example` = the text of the chosen statement. `Slide.example` is a plain string without sources, so the example id must be one of the bullets;
-  that statement stays in `bullets` with its sources. (No schema change was needed; the exporter in Epic 6 must not print it twice.)
-- `speaker_notes` = built by code only: the texts of the statements that are not bullets, plus the lecture time range of the section for
-  re-listening. The model writes no free speaker notes, so there are no unsourced "non-claim" notes.
+- `bullets` = copies of the chosen `Statement` objects, text and sources unchanged (a test checks this), WITHOUT the statement chosen as the example.
+- `example` = the text of the chosen example statement (its id must be one of the chosen ids). It is removed from `bullets`, so nothing is printed twice.
+  **Trade-off:** `Slide.example` is a plain string without sources, so code writes the sources of the example into the speaker notes
+  ("Source of the example: lecture 00:42-00:49 (seg_0006); web: <title> <url>"). The Slide object itself therefore carries no structured sources for the
+  example; the judge (S5-2) and the exporter (Epic 6) must read the statement from `notes.json`, or `Slide` needs an `example_sources` field (a schema
+  change, not made; it must be announced to the team). If the example is the only chosen statement it stays a bullet and there is no example box.
+- `speaker_notes` = built by code only: the texts of the statements that are not shown, the source line of the example, and the lecture time range of
+  the section for re-listening. The model writes no free speaker notes, so there are no unsourced "non-claim" notes.
 - `title` = the model's short label for the topic (not a claim). If it is empty or longer than `SLIDE_MAX_TITLE_WORDS` the section title is used.
 - Limits in `slides_config.py`, enforced by code, not in the prompt: `SLIDE_MAX_BULLETS` (5), `SLIDE_MAX_WORDS_PER_BULLET` (30; a longer statement
   is not shown as a bullet because shortening it would rewrite it). Cut and too-long statements move to the speaker notes, nothing is lost.
 - Guards, each listed in `slides_report.json`: unknown, duplicate or foreign statement id dropped; no bullets -> flagged, no slide; a failed section is flagged and the others go on.
 
-**Proven live (Oct 22, job_e2e_20261019_130712, Super, 3 calls, $0.0023, 4-5 s and 0.5-0.7k completion tokens each):** valid JSON at the first try,
-3 slides with 4 / 5 / 5 bullets, every bullet keeps its statement id and sources, the 5-bullet cap fired twice (sec_02, 2 statements moved to the notes).
-**Not proven:** the judge has not checked the slides (the bullets are already-checked statements, but the choice and order are not); retry and failure
-paths and the word limit with real output (fake client only); the pptx export (Epic 6). **Weak points seen:** the slides are only as good as the notes:
-sec_02 (filler statements) gets a weak slide, and sec_03 has no bullet about level sets (it is in the speaker notes), because the model prefers
-the first statements.
+**Proven live (Oct 22, job_e2e_20261019_130712, Super, 3 calls, 2.4-3.6 s each, 0.2-0.6k completion tokens):** valid JSON at the first try for both runs
+(first run $0.0023; run after the notes rework $0.0017, with the example removed from the bullets: 3 / 3 / 2 bullets and an example box on all 3 slides).
+Every bullet keeps its statement id and sources. **Not proven:** the judge has not checked the slides; retry and failure paths and the word limit with real
+output (fake client only); the pptx export (Epic 6). **Weak points seen:** the slides are only as good as the notes; with the example removed, sec_03's slide
+has only 2 bullets and none about level sets or convexity (they are in the speaker notes), because the model chose the example and the bullets from the first statements.
 
 ## How sources work
 
