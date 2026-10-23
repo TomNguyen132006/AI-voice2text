@@ -15,7 +15,8 @@ Built for the Nebius x NVIDIA Global AI Hackathon (track: Best Apps and Agents).
 > topic split `topics.py` (S2-3), long transcripts (S2-4), golden test `backend/golden/` (S2-5) and the
 > end-to-end entry point `python backend/run_epic2.py <transcript.json>` (clean + topic split, prints the
 > sections and the cost of the job). **Epic 3 done (Oct 22):** gap finder `gaps.py` (S3-1) and web search `enrich.py` (S3-2 wrapper, S3-3 cache,
-> S3-4 cap), both run live. Not proven live: the 429/5xx paths and the content quality of the search results. Next: Epic 4.
+> S3-4 cap), both run live. Not proven live: the 429/5xx paths and the content quality of the search results.
+> **Epic 4 part 1 (Oct 22):** `validate.py` (S4-3) and the notes writer `notes.py` (S4-1, run live once). Next: S4-2 (slides), not started.
 > Sections marked _TBD_ are filled in as we build.
 
 ## Repo structure
@@ -424,6 +425,24 @@ short "Your last answer was invalid: ...; return only the corrected JSON." messa
 error that survived `call_model`'s own retries, comes back as `ValidatedResult(ok=False, error_kind, error_message, ...)`.
 Costs, tokens and attempts of all tries are summed. **Status:** tested with a fake client only (15 tests); not yet run live
 (its first live use is S4-1).
+
+## Notes writer (S4-1, `backend/notes.py`)
+
+`python -m notes <job_id>` (from `backend/`) asks Super once per section (through `call_validated`) for short review notes and writes
+`jobs/{id}/notes.json` (a list of `Statement`) and `notes_report.json`. Super sees the section title, the cleaned segments, that section's
+gaps and the web snippets of its searches (ids `web_1`, `web_2`, ...; title and snippet only, urls are removed). It returns
+`[{"text", "sources": [ids]}]`. **Code** builds the `Statement`: ids `st_0001...` over the whole lecture, `section_id`, lecture
+`start/end` copied from the ORIGINAL `transcript.json`, web `url/title` copied from `search.json`. Guards, each reported in
+`notes_report.json`: unknown id, id of another section, unknown web id (the id is dropped); no valid source ("unsupported"), empty text,
+more than `NOTES_MAX_PER_SECTION` (10, `notes_config.py`, env override) statements (dropped); a failed section becomes an empty list with a flag.
+`schemas.py` is unchanged. The prompt tells the model that snippets are untrusted data; this is a prompt rule plus URL removal, not a guarantee.
+
+**Proven live (Oct 22, job_e2e_20261019_130712, Super, 3 calls, $0.0076):** one call per section returned valid JSON at the first try
+(`finish_reason` "stop", 2-8 s; 1.9-5.9k prompt tokens, 0.8-1.8k completion tokens of which 0.6-1.5k reasoning); 13 statements (7 / 3 / 3), 8 with a web source;
+0 dropped, 0 bad ids; lecture times equal the original transcript. **Not proven:** that the statements are TRUE (nobody has checked them against
+the lecture yet; the judge is S5-2), the guards on real bad output (only tested with a fake client), the retry path and a section whose answer
+is cut off, and long lectures. Observed weak points: the 75-segment section gave only 3 statements (thin coverage), and some statements are
+backed only by web snippets (e.g. the convexity note), not by the lecture.
 
 ## How sources work
 
