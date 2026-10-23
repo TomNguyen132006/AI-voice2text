@@ -414,6 +414,17 @@ so all its entries then say `cached: true` (the first run's `cached: false` is g
 cache (a second run makes 0 provider calls), model-written queries. **Not proven live:** the 429 and 5xx paths, and the content quality of
 the results (not judged, not checked against the lecture).
 
+## Validated model answers (S4-3, `backend/validate.py`)
+
+`call_validated(role, messages, parse_fn, job_id=, stage=, max_tokens=)` is the door for every stage that needs JSON from a model
+(notes, slides, judge). It calls `call_model`, strips a code fence, and runs `parse_fn(text)`, which builds the objects and raises
+`ValidationProblem` (at most 3 short problems with field paths, no raw data, keys scrubbed). On a problem it retries ONCE with a
+short "Your last answer was invalid: ...; return only the corrected JSON." message (the bad answer is not sent back); a cut-off answer
+(`finish_reason` "length") is retried once with doubled `max_tokens`. It never raises to the pipeline: the second failure, or an API
+error that survived `call_model`'s own retries, comes back as `ValidatedResult(ok=False, error_kind, error_message, ...)`.
+Costs, tokens and attempts of all tries are summed. **Status:** tested with a fake client only (15 tests); not yet run live
+(its first live use is S4-1).
+
 ## How sources work
 
 Every statement in the notes and slides must have a source: a lecture moment or a web page.
