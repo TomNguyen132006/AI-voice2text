@@ -16,7 +16,7 @@ Built for the Nebius x NVIDIA Global AI Hackathon (track: Best Apps and Agents).
 > end-to-end entry point `python backend/run_epic2.py <transcript.json>` (clean + topic split, prints the
 > sections and the cost of the job). **Epic 3 done (Oct 22):** gap finder `gaps.py` (S3-1) and web search `enrich.py` (S3-2 wrapper, S3-3 cache,
 > S3-4 cap), both run live. Not proven live: the 429/5xx paths and the content quality of the search results.
-> **Epic 4 part 1 (Oct 22):** `validate.py` (S4-3) and the notes writer `notes.py` (S4-1, run live once). Next: S4-2 (slides), not started.
+> **Epic 4 part 1 (Oct 22):** `validate.py` (S4-3) and the notes writer `notes.py` (S4-1, run live once). Next: Epic 5 (judge). **S4-2 done (Oct 22):** slide writer `slides.py`, run live once.
 > Sections marked _TBD_ are filled in as we build.
 
 ## Repo structure
@@ -460,6 +460,28 @@ descent) and the guard fired where intended (1 web-only statement dropped). But 
 segment by segment and writes filler ("The lecturer says he has prepared for the crucial example."); sec_01 and sec_02 each produced 13-15
 statements and the cap of 10 cut the LAST ones (the end of the section is lost); sec_02 lost its only web explanation; cost +100 %, latency 17-24 s.
 Open design question: cut by importance instead of by order, or ask for "one note per idea, not per sentence". Not done yet.
+
+## Slide writer (S4-2, `backend/slides.py`)
+
+`python -m slides <job_id>` (from `backend/`) builds one `schemas.Slide` per section FROM the validated statements in `notes.json`, and writes
+`slides.json` and `slides_report.json`. Super sees the section title and that section's statements as `[{id, text}]` (no sources, no urls) and
+returns `{"title", "bullets": [ids], "example": id|null}`. **The model writes no claim.** Code does the rest:
+- `bullets` = copies of the chosen `Statement` objects, text and sources unchanged (a test checks this).
+- `example` = the text of the chosen statement. `Slide.example` is a plain string without sources, so the example id must be one of the bullets;
+  that statement stays in `bullets` with its sources. (No schema change was needed; the exporter in Epic 6 must not print it twice.)
+- `speaker_notes` = built by code only: the texts of the statements that are not bullets, plus the lecture time range of the section for
+  re-listening. The model writes no free speaker notes, so there are no unsourced "non-claim" notes.
+- `title` = the model's short label for the topic (not a claim). If it is empty or longer than `SLIDE_MAX_TITLE_WORDS` the section title is used.
+- Limits in `slides_config.py`, enforced by code, not in the prompt: `SLIDE_MAX_BULLETS` (5), `SLIDE_MAX_WORDS_PER_BULLET` (30; a longer statement
+  is not shown as a bullet because shortening it would rewrite it). Cut and too-long statements move to the speaker notes, nothing is lost.
+- Guards, each listed in `slides_report.json`: unknown, duplicate or foreign statement id dropped; no bullets -> flagged, no slide; a failed section is flagged and the others go on.
+
+**Proven live (Oct 22, job_e2e_20261019_130712, Super, 3 calls, $0.0023, 4-5 s and 0.5-0.7k completion tokens each):** valid JSON at the first try,
+3 slides with 4 / 5 / 5 bullets, every bullet keeps its statement id and sources, the 5-bullet cap fired twice (sec_02, 2 statements moved to the notes).
+**Not proven:** the judge has not checked the slides (the bullets are already-checked statements, but the choice and order are not); retry and failure
+paths and the word limit with real output (fake client only); the pptx export (Epic 6). **Weak points seen:** the slides are only as good as the notes:
+sec_02 (filler statements) gets a weak slide, and sec_03 has no bullet about level sets (it is in the speaker notes), because the model prefers
+the first statements.
 
 ## How sources work
 
