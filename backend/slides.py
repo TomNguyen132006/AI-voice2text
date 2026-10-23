@@ -121,7 +121,7 @@ def slide_for_section(
     max_words = max_words or slides_config.max_words_per_bullet()
     info = {
         "section_id": section.id, "title": section.title, "statements_in": len(statements), "bullets": 0,
-        "example": None, "slide_title": None, "flagged": None, "error_message": None, "dropped": [],
+        "example_statement_id": None, "slide_title": None, "flagged": None, "error_message": None, "dropped": [],
         "calls": 0, "tries": 0, "prompt_tokens": 0, "completion_tokens": 0, "est_cost_usd": 0.0,
         "cost_is_lower_bound": False, "latency_ms": 0, "steps": [],
     }
@@ -175,19 +175,19 @@ def slide_for_section(
             info["dropped"].append({"id": draft.example, "reason": "example_not_in_bullets"})
         else:
             example = match.text
-            info["example"] = match.id
+            info["example_statement_id"] = match.id
 
     title = " ".join(draft.title.split())
     if not title or _words(title) > slides_config.SLIDE_MAX_TITLE_WORDS:
         info["dropped"].append({"id": None, "reason": "title_empty_or_too_long (section title used)"})
         title = section.title
-    example_statement = by_id[info["example"]] if info["example"] else None
+    example_statement = by_id[info["example_statement_id"]] if info["example_statement_id"] else None
     if example_statement is not None:
         bullets = [st for st in chosen if st.id != example_statement.id]  # nothing is printed twice
         if not bullets:  # the example was the only choice: keep it as the bullet, no example box
             bullets, example, example_statement = chosen, None, None
-            info["dropped"].append({"id": info["example"], "reason": "example_is_the_only_bullet (kept as bullet)"})
-            info["example"] = None
+            info["dropped"].append({"id": info["example_statement_id"], "reason": "example_is_the_only_bullet (kept as bullet)"})
+            info["example_statement_id"] = None
     else:
         bullets = chosen
     used_ids = {st.id for st in chosen}
@@ -205,7 +205,10 @@ def build_result(job_id: str, per_section: list[SectionSlide]) -> SlidesResult:
     report = {
         "job_id": job_id, "model_id": llm_config.get_role(ROLE).model_id,
         "max_bullets": slides_config.max_bullets(), "max_words_per_bullet": slides_config.max_words_per_bullet(),
-        "section_count": len(per_section), "slide_count": sum(s.slide is not None for s in per_section),
+        "section_count": len(per_section),
+        "slides": [{"section_id": s.section_id, "example_statement_id": s.info["example_statement_id"]}
+                   for s in per_section if s.slide is not None],
+        "slide_count": sum(s.slide is not None for s in per_section),
         "flagged": [{"section_id": i["section_id"], "reason": i["flagged"], "message": i["error_message"]}
                     for i in infos if i["flagged"]],
         "dropped": [{"section_id": i["section_id"], **d} for i in infos for d in i["dropped"]],

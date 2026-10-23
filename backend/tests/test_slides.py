@@ -54,7 +54,7 @@ def test_valid_slide_copies_text_and_sources_unchanged():
     assert [b.id for b in slide.bullets] == ["st_0001", "st_0003"]  # the model's order, without the example
     assert [b.text for b in slide.bullets] == [STATEMENTS[0].text, STATEMENTS[2].text]  # copied, not rewritten
     assert slide.bullets[0].sources == STATEMENTS[0].sources and [s.type for s in slide.bullets[0].sources] == ["lecture", "web"]
-    assert slide.example == STATEMENTS[1].text and r.info["example"] == "st_0002"
+    assert slide.example == STATEMENTS[1].text and r.info["example_statement_id"] == "st_0002"
     assert slide.bullets[0] is not STATEMENTS[0]  # a copy
     assert client.calls[0]["model"] == "nvidia/nemotron-3-super-120b-a12b" and r.info["flagged"] is None
     assert r.info["bullets"] == 2
@@ -73,7 +73,7 @@ def test_example_is_not_printed_twice_and_its_source_goes_to_the_speaker_notes()
 
 def test_example_that_is_the_only_bullet_stays_a_bullet():
     r, _ = one(lambda k, n: answer(["st_0002"], example="st_0002"))
-    assert [b.id for b in r.slide.bullets] == ["st_0002"] and r.slide.example is None and r.info["example"] is None
+    assert [b.id for b in r.slide.bullets] == ["st_0002"] and r.slide.example is None and r.info["example_statement_id"] is None
     assert r.info["dropped"][0]["reason"].startswith("example_is_the_only_bullet")
 
 
@@ -182,3 +182,16 @@ def test_slides_job_saves_files(tmp_path):
     assert [s.section_id for s in saved] == ["sec_01", "sec_02"] and saved[0].bullets[0].sources == STATEMENTS[0].sources
     assert report["slide_count"] == 2 and report["calls"] == 2 and "slide" in slides.format_table(result)
     assert "http" not in json.dumps(report)
+
+
+def test_slides_report_lists_the_example_statement_id_per_slide():
+    def responder(kwargs, n):
+        if payload_of(kwargs)["section_id"] == "sec_01":
+            return answer(["st_0001", "st_0002"], example="st_0002")
+        return answer(["st_0004"])  # no example
+
+    result = slides.write_slides("job_s1", {"sections": SECS, "statements": STATEMENTS}, FakeClient(responder))
+    assert result.report["slides"] == [
+        {"section_id": "sec_01", "example_statement_id": "st_0002"},
+        {"section_id": "sec_02", "example_statement_id": None},
+    ]
