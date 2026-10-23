@@ -9,7 +9,7 @@ import pydantic
 import llm
 from schemas import StatementDraft
 from tests.test_clean import FakeClient, make_response
-from validate import ValidationProblem, call_validated, parse_json_list
+from validate import ValidationProblem, call_validated, parse_json_list, parse_json_object
 
 REQUEST = httpx.Request("POST", "https://example.invalid/v1/chat/completions")
 MESSAGES = [{"role": "system", "content": "sys"}, {"role": "user", "content": "q"}]
@@ -133,3 +133,10 @@ def test_parser_bug_does_not_crash_the_pipeline():
     client = FakeClient(lambda k, n: "[]")
     r = call_validated("super", MESSAGES, lambda text: 1 / 0, job_id="job_v1", stage="t", max_tokens=10, client=client)
     assert not r.ok and r.error_kind == "invalid" and "ZeroDivisionError" in r.error_message
+
+
+def test_parse_json_object():
+    assert parse_json_object('Here: {"a": [1]} done') == {"a": [1]}
+    for bad in ("no braces", "{broken", "{}}{"):
+        with pytest.raises(ValidationProblem):
+            parse_json_object(bad)

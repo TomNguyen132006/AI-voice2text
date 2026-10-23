@@ -16,6 +16,7 @@ the cost and the attempts of every try. A cost of None from the API makes cost_i
 Problem messages hold at most 3 problems, each with a field path and a clipped text, never raw
 data; known API keys are scrubbed from them.
 """
+import json
 import os
 import re
 from dataclasses import dataclass, field
@@ -79,6 +80,20 @@ def parse_json_list(text: str) -> list[dict]:
         return _parse_reply(text)
     except ValueError as error:
         raise ValidationProblem(str(error)) from None
+
+
+def parse_json_object(text: str) -> dict:
+    """The JSON object inside text (from the first { to the last }); raises ValidationProblem."""
+    start, end = text.find("{"), text.rfind("}")
+    if start == -1 or end <= start:
+        raise ValidationProblem("no JSON object found")
+    try:
+        parsed = json.loads(text[start : end + 1])
+    except json.JSONDecodeError as error:
+        raise ValidationProblem(f"invalid JSON ({error.msg})") from None
+    if not isinstance(parsed, dict):
+        raise ValidationProblem("the answer must be a JSON object")
+    return parsed
 
 
 @dataclass
