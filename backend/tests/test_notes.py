@@ -99,10 +99,10 @@ def test_id_of_another_section_is_dropped():
 
 
 def test_unknown_web_id_and_web_id_of_other_section():
-    r, _ = one(lambda k, n: reply(note("Ok.", "seg_0000", "web_9"), note("Web only.", "web_2")))
+    r, _ = one(lambda k, n: reply(note("Ok.", "seg_0000", "web_9"), note("The Hessian page adds detail.", "web_2")))
     assert r.info["dropped_sources"] == [{"n": 1, "source": "web_9", "reason": "unknown_web_id"}]
     assert r.drafts[1].sources[0].url == "https://example.org/two"
-    r2, _ = one(lambda k, n: reply(note("Descent.", "web_1")), section=SECS[1])  # web_1 of sec_02 is another url
+    r2, _ = one(lambda k, n: reply(note("Steepest descent follows the gradient.", "web_1")), section=SECS[1])  # web_1 of sec_02 is another url
     assert r2.drafts[0].sources[0].url == "https://example.org/descent"
 
 
@@ -185,7 +185,7 @@ def test_notes_job_saves_files_and_numbers_statements_over_the_lecture(tmp_path)
 
     def responder(kwargs, n):
         sid = payload_of(kwargs)["section_id"]
-        return reply(note(f"{sid} first.", "seg_0000" if sid == "sec_01" else "seg_0002"), note(f"{sid} second.", "web_1"))
+        return reply(note(f"{sid} first.", "seg_0000" if sid == "sec_01" else "seg_0002"), note("Hessian and steepest descent are explained." , "web_1"))
 
     result = notes.notes_job("job_n2", storage, FakeClient(responder))
     saved = load_json(job_key("job_n2", "notes.json"), storage)
@@ -195,3 +195,52 @@ def test_notes_job_saves_files_and_numbers_statements_over_the_lecture(tmp_path)
     assert report["statement_count"] == 4 and report["with_web_source"] == 2 and report["calls"] == 2
     assert "job_n2" in notes.format_table(result) or "stmts" in notes.format_table(result)
     assert "tvly" not in json.dumps(report) and "http" not in json.dumps(report)  # the report keeps no urls or keys
+
+
+def test_web_only_statement_must_name_a_gap_term_of_its_section():
+    r, _ = one(lambda k, n: reply(
+        note("Eigenvalues are stretch factors.", "web_1"),  # off topic: no gap term of sec_01 in the text
+        note("The Hessians are second derivatives.", "web_1"),  # plural of the term "Hessian": allowed
+        note("Steepest descent is mentioned.", "web_1"),  # a term of ANOTHER section does not count
+        note("Eigenvalues come from the lecture.", "seg_0001"),  # with a lecture source no gap term is needed
+    ))
+    assert [d.text for d in r.drafts] == ["The Hessians are second derivatives.", "Eigenvalues come from the lecture."]
+    assert [(d["n"], d["reason"]) for d in r.info["dropped"]] == [(1, "web_only_off_topic"), (3, "web_only_off_topic")]
+    assert r.info["web_only"] == 1
+
+
+def test_extra_sources_are_cut_lecture_first_and_reported(monkeypatch):
+    r, _ = one(lambda k, n: reply(note("Many.", "web_1", "seg_0001", "web_2", "seg_0000")))
+    assert [getattr(s, "segment_id", None) or s.title for s in r.drafts[0].sources] == ["seg_0001", "seg_0000", "Hessian matrix - Wiki"]
+    assert r.info["dropped_sources"] == [{"n": 1, "source": "web_2", "reason": "over_max_sources"}]
+    monkeypatch.setenv("NOTES_MAX_SOURCES_PER_STATEMENT", "1")
+    r, _ = one(lambda k, n: reply(note("Many.", "seg_0001", "seg_0000")))
+    assert len(r.drafts[0].sources) == 1 and r.info["dropped_sources"][0]["source"] == "seg_0000"
+
+
+def test_default_max_sources_is_three():
+    assert notes.notes_config.max_sources() == 3
+
+
+def test_web_only_check_happens_after_the_source_cut():
+    # three off-topic web ids stay web-only after the cut; one lecture id would make it lecture-backed
+    r, _ = one(lambda k, n: reply(note("Nothing relevant.", "web_1", "web_2")))
+    assert r.drafts == [] and r.info["dropped"][0]["reason"] == "web_only_off_topic"
+
+
+def test_coverage_web_only_and_sources_per_statement_in_the_report():
+    r, _ = one(lambda k, n: reply(
+        note("First.", "seg_0000", "web_1"), note("Second.", "seg_0000"), note("The Hessian from the web.", "web_2"),
+    ))
+    assert r.info["cited_segments"] == 1 and r.info["coverage"] == 0.5  # seg_0000 of the 2 segments of sec_01
+    assert r.info["web_only"] == 1 and r.info["sources_per_statement"] == [2, 1, 1]
+    report = notes.build_result("job_n1", [r], ORIGINAL).report
+    assert report["sections"][0]["coverage"] == 0.5 and report["max_sources_per_statement"] == 3
+    assert "coverage" in notes.format_table(notes.NotesResult([], report))
+
+
+def test_prompt_asks_for_coverage_without_a_number():
+    prompt = notes.SYSTEM_PROMPT
+    assert "Do not skip a topic because the section is long" in prompt and "short review notes" not in prompt
+    import re
+    assert not re.search(r"(\d+|at least|at most|exactly)\s+(statements|notes|sentences)", prompt)  # no target count

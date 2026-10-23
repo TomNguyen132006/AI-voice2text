@@ -82,11 +82,16 @@ def normalize_term(term: str) -> str:
     return " ".join(_fold(w) for w in _words(term))
 
 
+def count_in_text(term: str, text: str) -> int:
+    """How many times the (normalized) term occurs in text, plural forms included."""
+    want = normalize_term(term).split()
+    have = [_fold(w) for w in _words(text)]
+    return sum(have[i : i + len(want)] == want for i in range(len(have) - len(want) + 1)) if want else 0
+
+
 def _count(term: str, segments: list[Segment]) -> int:
     """How many times the (normalized) term occurs in the segments' text, plural forms included."""
-    want = normalize_term(term).split()
-    have = [_fold(w) for w in _words(" ".join(s.text for s in segments))]
-    return sum(have[i : i + len(want)] == want for i in range(len(have) - len(want) + 1)) if want else 0
+    return count_in_text(term, " ".join(s.text for s in segments))
 
 
 _MARKUP = re.compile(r"[$\\{}^_]")
