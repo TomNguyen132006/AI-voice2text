@@ -48,15 +48,33 @@ def one(responder, section=SECS[0], statements=None, **kw):
 
 
 def test_valid_slide_copies_text_and_sources_unchanged():
-    r, client = one(lambda k, n: answer(["st_0002", "st_0001"], example="st_0002"))
+    r, client = one(lambda k, n: answer(["st_0001", "st_0002", "st_0003"], example="st_0002"))
     slide = r.slide
     assert isinstance(slide, Slide) and slide.section_id == "sec_01" and slide.title == "Hessian topic"
-    assert [b.id for b in slide.bullets] == ["st_0002", "st_0001"]  # the order the model chose
-    assert [b.text for b in slide.bullets] == [STATEMENTS[1].text, STATEMENTS[0].text]  # copied, not rewritten
-    assert slide.bullets[0].sources == STATEMENTS[1].sources and [s.type for s in slide.bullets[0].sources] == ["lecture", "web"]
+    assert [b.id for b in slide.bullets] == ["st_0001", "st_0003"]  # the model's order, without the example
+    assert [b.text for b in slide.bullets] == [STATEMENTS[0].text, STATEMENTS[2].text]  # copied, not rewritten
+    assert slide.bullets[0].sources == STATEMENTS[0].sources and [s.type for s in slide.bullets[0].sources] == ["lecture", "web"]
     assert slide.example == STATEMENTS[1].text and r.info["example"] == "st_0002"
-    assert slide.bullets[0] is not STATEMENTS[1]  # a copy
+    assert slide.bullets[0] is not STATEMENTS[0]  # a copy
     assert client.calls[0]["model"] == "nvidia/nemotron-3-super-120b-a12b" and r.info["flagged"] is None
+    assert r.info["bullets"] == 2
+
+
+def test_example_is_not_printed_twice_and_its_source_goes_to_the_speaker_notes():
+    r, _ = one(lambda k, n: answer(["st_0001", "st_0002"], example="st_0002"))
+    slide = r.slide
+    assert slide.example not in [b.text for b in slide.bullets]
+    notes = slide.speaker_notes.splitlines()
+    assert notes[0] == STATEMENTS[2].text  # the statement that is neither bullet nor example
+    assert notes[1] == ("Source of the example: lecture 00:01-00:09 (seg_0000); "
+                        "web: Hessian matrix - Wiki <https://en.wikipedia.org/wiki/Hessian_matrix>.")
+    assert notes[-1].startswith("Lecture time of this section")
+
+
+def test_example_that_is_the_only_bullet_stays_a_bullet():
+    r, _ = one(lambda k, n: answer(["st_0002"], example="st_0002"))
+    assert [b.id for b in r.slide.bullets] == ["st_0002"] and r.slide.example is None and r.info["example"] is None
+    assert r.info["dropped"][0]["reason"].startswith("example_is_the_only_bullet")
 
 
 def test_model_cannot_change_the_text():

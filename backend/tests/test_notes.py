@@ -193,7 +193,7 @@ def test_notes_job_saves_files_and_numbers_statements_over_the_lecture(tmp_path)
     assert [s["id"] for s in saved] == ["st_0001", "st_0002", "st_0003", "st_0004"]
     assert [Statement(**s).section_id for s in saved] == ["sec_01", "sec_01", "sec_02", "sec_02"]
     assert report["statement_count"] == 4 and report["with_web_source"] == 2 and report["calls"] == 2
-    assert "job_n2" in notes.format_table(result) or "stmts" in notes.format_table(result)
+    assert "kept" in notes.format_table(result)
     assert "tvly" not in json.dumps(report) and "http" not in json.dumps(report)  # the report keeps no urls or keys
 
 
@@ -209,17 +209,62 @@ def test_web_only_statement_must_name_a_gap_term_of_its_section():
     assert r.info["web_only"] == 1
 
 
-def test_extra_sources_are_cut_lecture_first_and_reported(monkeypatch):
+def test_extra_sources_are_cut_separately_for_lecture_and_web(monkeypatch):
+    # defaults: 6 lecture and 3 web sources; here the section has 2 segments and 2 web ids, so use small limits
+    monkeypatch.setenv("NOTES_MAX_LECTURE_SOURCES", "1")
+    monkeypatch.setenv("NOTES_MAX_WEB_SOURCES", "1")
     r, _ = one(lambda k, n: reply(note("Many.", "web_1", "seg_0001", "web_2", "seg_0000")))
-    assert [getattr(s, "segment_id", None) or s.title for s in r.drafts[0].sources] == ["seg_0001", "seg_0000", "Hessian matrix - Wiki"]
-    assert r.info["dropped_sources"] == [{"n": 1, "source": "web_2", "reason": "over_max_sources"}]
-    monkeypatch.setenv("NOTES_MAX_SOURCES_PER_STATEMENT", "1")
-    r, _ = one(lambda k, n: reply(note("Many.", "seg_0001", "seg_0000")))
-    assert len(r.drafts[0].sources) == 1 and r.info["dropped_sources"][0]["source"] == "seg_0000"
+    assert [getattr(s, "segment_id", None) or s.title for s in r.drafts[0].sources] == ["seg_0001", "Hessian matrix - Wiki"]
+    assert r.info["dropped_sources"] == [
+        {"n": 1, "source": "seg_0000", "reason": "over_max_lecture_sources"},
+        {"n": 1, "source": "web_2", "reason": "over_max_web_sources"},
+    ]
+    report = notes.build_result("job_n1", [r], ORIGINAL).report
+    assert report["sources_cut"] == 2
 
 
-def test_default_max_sources_is_three():
-    assert notes.notes_config.max_sources() == 3
+def test_default_source_limits_are_six_lecture_and_three_web():
+    assert notes.notes_config.max_lecture_sources() == 6 and notes.notes_config.max_web_sources() == 3
+
+
+@pytest.mark.parametrize("a, b, same", [
+    ("convex", "convexity", True), ("convexity", "convex", True), ("eigenvalue", "eigenvalues", True),
+    ("Hessian", "hessians", True), ("gradient", "gradients", True), ("derivative", "derivation", True),  # known false positive of the 6-letter rule: they share "deriva"
+    ("cat", "category", True), ("go", "gone", False), ("level", "lever", False), ("condition", "conditional", True),
+])
+def test_same_word_form(a, b, same):
+    assert notes.same_word_form(a, b) is same
+
+
+def test_mentions_term_matches_word_forms_in_order():
+    assert notes.mentions_term("convexity", "A function is convex if the line segment lies above.")
+    assert notes.mentions_term("eigenvalue", "Eigenvalues are stretch factors.")
+    assert notes.mentions_term("level set", "The level sets of f are lines.")
+    assert not notes.mentions_term("level set", "A set of levels.")  # order matters
+    assert not notes.mentions_term("level set", "A level of the building.")  # all words must match
+    assert not notes.mentions_term("", "anything")
+
+
+def test_web_only_statement_about_convex_is_kept_for_the_term_convexity():
+    gaps = [{"section_id": "sec_01", "term": "convexity", "reason": "Needs explaining."}]
+    client = FakeClient(lambda k, n: reply(note("A function is convex if the segment between two points lies above.", "web_1")))
+    segs = [s for s in CLEAN if s.id in SECS[0].segment_ids]
+    r = notes.notes_for_section(SECS[0], segs, job_id="job_n1", gaps=gaps, search=SEARCH, all_segment_ids={s.id for s in CLEAN},
+                                original=ORIGINAL, client=client)
+    # SEARCH has no entry for the term "convexity", so web_1 does not exist: the id is unknown, not off topic
+    assert r.drafts == [] and r.info["dropped"][0]["reason"] == "unsupported"
+    search = [{"section_id": "sec_01", "term": "convexity", "results": [{"title": "Convex", "url": "https://x.org/c", "snippet": "s"}]}]
+    r = notes.notes_for_section(SECS[0], segs, job_id="job_n1", gaps=gaps, search=search, all_segment_ids={s.id for s in CLEAN},
+                                original=ORIGINAL, client=client)
+    assert len(r.drafts) == 1 and r.info["web_only"] == 1
+
+
+def test_n_generated_and_n_cut_by_cap_are_reported():
+    r, _ = one(lambda k, n: reply(*[note(f"Note {i}.", "seg_0000") for i in range(5)]), max_statements=3)
+    assert r.info["n_generated"] == 5 and r.info["n_cut_by_cap"] == 2 and r.info["statements"] == 3
+    report = notes.build_result("job_n1", [r], ORIGINAL).report
+    assert report["n_generated"] == 5 and report["n_cut_by_cap"] == 2
+    assert "cap-cut" in notes.format_table(notes.NotesResult([], report))
 
 
 def test_web_only_check_happens_after_the_source_cut():
@@ -235,12 +280,12 @@ def test_coverage_web_only_and_sources_per_statement_in_the_report():
     assert r.info["cited_segments"] == 1 and r.info["coverage"] == 0.5  # seg_0000 of the 2 segments of sec_01
     assert r.info["web_only"] == 1 and r.info["sources_per_statement"] == [2, 1, 1]
     report = notes.build_result("job_n1", [r], ORIGINAL).report
-    assert report["sections"][0]["coverage"] == 0.5 and report["max_sources_per_statement"] == 3
+    assert report["sections"][0]["coverage"] == 0.5 and report["max_lecture_sources"] == 6 and report["max_web_sources"] == 3
     assert "coverage" in notes.format_table(notes.NotesResult([], report))
 
 
 def test_prompt_asks_for_coverage_without_a_number():
     prompt = notes.SYSTEM_PROMPT
-    assert "Do not skip a topic because the section is long" in prompt and "short review notes" not in prompt
+    assert "one note per IDEA" in prompt and "Skip remarks about what the lecturer plans" in prompt and "short review notes" not in prompt and "Do not skip a main idea because the section is long" in prompt
     import re
     assert not re.search(r"(\d+|at least|at most|exactly)\s+(statements|notes|sentences)", prompt)  # no target count

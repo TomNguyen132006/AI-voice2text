@@ -3,11 +3,14 @@
 Super sees the section title and that section's statements as [{id, text}] (no sources, no urls) and
 chooses: a short slide title, the ids of the statements to show as bullets (in order), and optionally
 ONE id as the example. The model never writes a claim. Code builds the schemas.Slide:
-- bullets      = copies of the chosen Statement objects (text and sources unchanged)
-- example      = the text of the chosen statement. Slide.example is a plain string without sources, so
-                 the example id must be one of the bullets: its statement stays in bullets WITH its sources.
-- speaker_notes = built by code only: the statements that are not bullets (their texts) and the lecture
-                 time range of the section for re-listening. The model writes no free speaker notes.
+- bullets      = copies of the chosen Statement objects (text and sources unchanged), WITHOUT the example
+- example      = the text of the chosen example statement. The example id must be one of the chosen ids; that
+                 statement is removed from the bullets so nothing is printed twice. Slide.example is a plain
+                 string without sources, so code writes the sources of the example into the speaker notes
+                 ("Source of the example: ..."); the statement itself, with its sources, stays in notes.json.
+                 (If the example is the only chosen statement it stays a bullet and there is no example.)
+- speaker_notes = built by code only: the statements that are not shown (their texts), the source line of the
+                 example, and the lecture time range of the section for re-listening. The model writes no free text.
 - title        = the model's short label (a name for the topic, not a claim); a title that is empty or
                  too long is replaced by the section title.
 Limits (slides_config.py) are enforced by code: an unknown id or an id of another section is dropped;
@@ -44,7 +47,7 @@ SYSTEM_PROMPT = """You turn the notes of ONE lecture section into ONE slide for 
 You do not write any content yourself. You choose from the statements:
 - "title": a short name for the topic of the slide (a label, not a sentence that claims something).
 - "bullets": the ids of the statements to show on the slide, the most important ones, in a sensible teaching order. Use only ids from the user message, each at most once.
-- "example": the id of ONE statement from "bullets" that works as the example of the slide, or null if none does.
+- "example": the id of ONE statement from "bullets" that works as the example of the slide, or null if none does. It is shown in the example box instead of as a bullet.
 Reply with ONLY a JSON object:
 {"title": "<short topic name>", "bullets": ["st_0001", "st_0002"], "example": "st_0002"}
 No other text, no code fence."""
@@ -87,9 +90,24 @@ def _clock(seconds: float) -> str:
     return f"{total // 3600:d}:{total % 3600 // 60:02d}:{total % 60:02d}" if total >= 3600 else f"{total // 60:02d}:{total % 60:02d}"
 
 
-def speaker_notes(section: Section, rest: list[Statement]) -> str:
-    """Only text copied from statements, plus the lecture time range. No sentence written by a model."""
+def source_line(statement: Statement) -> str:
+    """Where a statement comes from, built from its sources: lecture times and segment ids, web titles and urls."""
+    parts = []
+    lecture = [s for s in statement.sources if s.type == "lecture"]
+    if lecture:
+        times = ", ".join(f"{_clock(s.start)}-{_clock(s.end)}" for s in lecture)
+        parts.append(f"lecture {times} ({', '.join(s.segment_id for s in lecture)})")
+    parts += [f"web: {s.title} <{s.url}>" if s.title else f"web: <{s.url}>" for s in statement.sources if s.type == "web"]
+    return "Source of the example: " + "; ".join(parts) + "."
+
+
+def speaker_notes(section: Section, rest: list[Statement], example: Statement | None = None) -> str:
+    """Only text copied from statements, plus the source of the example and the lecture time range.
+    No sentence written by a model. Slide.example is a plain string without sources, so the sources of the
+    example statement are written here, by code."""
     lines = [st.text for st in rest]
+    if example is not None:
+        lines.append(source_line(example))
     lines.append(f"Lecture time of this section: {_clock(section.start)} - {_clock(section.end)} (to listen again).")
     return "\n".join(lines)
 
@@ -163,13 +181,22 @@ def slide_for_section(
     if not title or _words(title) > slides_config.SLIDE_MAX_TITLE_WORDS:
         info["dropped"].append({"id": None, "reason": "title_empty_or_too_long (section title used)"})
         title = section.title
-    chosen_ids = {st.id for st in chosen}
+    example_statement = by_id[info["example"]] if info["example"] else None
+    if example_statement is not None:
+        bullets = [st for st in chosen if st.id != example_statement.id]  # nothing is printed twice
+        if not bullets:  # the example was the only choice: keep it as the bullet, no example box
+            bullets, example, example_statement = chosen, None, None
+            info["dropped"].append({"id": info["example"], "reason": "example_is_the_only_bullet (kept as bullet)"})
+            info["example"] = None
+    else:
+        bullets = chosen
+    used_ids = {st.id for st in chosen}
     slide = Slide(
         section_id=section.id, title=title,
-        bullets=[st.model_copy(deep=True) for st in chosen], example=example,
-        speaker_notes=speaker_notes(section, [st for st in statements if st.id not in chosen_ids]),
+        bullets=[st.model_copy(deep=True) for st in bullets], example=example,
+        speaker_notes=speaker_notes(section, [st for st in statements if st.id not in used_ids], example_statement),
     )
-    info["bullets"], info["slide_title"] = len(chosen), title
+    info["bullets"], info["slide_title"] = len(bullets), title
     return SectionSlide(section.id, slide, info)
 
 
