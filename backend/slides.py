@@ -222,10 +222,10 @@ def build_result(job_id: str, per_section: list[SectionSlide]) -> SlidesResult:
     return SlidesResult([s.slide for s in per_section if s.slide is not None], report)
 
 
-def load_inputs(job_id: str, storage=None) -> dict:
+def load_inputs(job_id: str, storage=None, statements_file: str = "notes.json") -> dict:
     return {
         "sections": load_sections(job_id, storage),
-        "statements": [Statement(**s) for s in load_json(job_key(job_id, "notes.json"), storage)],
+        "statements": [Statement(**s) for s in load_json(job_key(job_id, statements_file), storage)],
     }
 
 
@@ -245,8 +245,9 @@ def save_result(job_id: str, result: SlidesResult, storage=None) -> None:
     save_json(job_key(job_id, "slides_report.json"), result.report, storage)
 
 
-def slides_job(job_id: str, storage=None, client=None) -> SlidesResult:
-    result = write_slides(job_id, load_inputs(job_id, storage), client)
+def slides_job(job_id: str, storage=None, client=None, statements_file: str = "notes.json") -> SlidesResult:
+    """statements_file: "notes.json", or "notes_final.json" to build slides only from statements the judge kept."""
+    result = write_slides(job_id, load_inputs(job_id, storage, statements_file), client)
     save_result(job_id, result, storage)
     return result
 
