@@ -106,3 +106,25 @@ def test_stats_endpoint(client):
     save_json(job_key("job_st", "call_stats.json"), {"total": {"calls": 3}}, storage)
     body = client.get("/jobs/job_st/stats").json()
     assert body["available"] is True and body["total_seconds"] == 5.0 and body["calls"] == {"total": {"calls": 3}}
+
+
+def test_job_that_lost_its_server_becomes_an_error(client, monkeypatch):
+    import time as time_module
+
+    real_time = time_module.time
+    storage = get_storage()
+    pipeline.save_job(Job(id="job_old", status="running", stage="writing"), storage)
+    assert client.get("/jobs/job_old").json()["status"] == "running"  # just saved: fine
+    monkeypatch.setattr(jobs_api.time, "time", lambda: real_time() + jobs_api.STALE_JOB_SEC + 60)
+    body = client.get("/jobs/job_old").json()
+    assert body["status"] == "error" and body["stage"] == "writing" and "restarted" in body["error"]
+
+
+def test_audio_is_refused_when_the_server_has_no_engine(client, monkeypatch):
+    monkeypatch.setenv("TRANSCRIBE_ENGINE", "local")
+    monkeypatch.setattr("importlib.util.find_spec", lambda name: None)
+    r = upload(client, "lecture.mp3", b"audio")
+    assert r.status_code == 400 and "transcript" in r.json()["detail"]
+    assert upload(client).status_code == 200  # a transcript is still fine
+    monkeypatch.setenv("TRANSCRIBE_ENGINE", "fake")
+    assert upload(client, "lecture.mp3", b"audio").status_code == 200

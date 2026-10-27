@@ -11,6 +11,7 @@ Job state lives in the job's storage (jobs/{id}/job.json), so it survives a rest
 """
 import json
 import os
+import time
 import uuid
 from pathlib import Path
 
@@ -19,6 +20,7 @@ from fastapi import APIRouter, BackgroundTasks, File, HTTPException, Response, U
 import export
 import pipeline
 import stats
+import transcribe
 from schemas import Job, JobResponse, Section, Statement
 from storage import StorageError, get_storage, job_key, load_json, save_json
 
@@ -27,6 +29,9 @@ router = APIRouter()
 SAMPLES = Path(__file__).parent / "samples"
 SAMPLE_JOB_ID = "job_sample"
 MAX_UPLOAD_MB = int(os.getenv("MAX_UPLOAD_MB") or 500)
+# A job that was saved this long ago and is still queued/running lost its server (restart, free-tier sleep): report an error.
+STALE_JOB_SEC = float(os.getenv("STALE_JOB_MINUTES") or 45) * 60
+STALE_MESSAGE = "The server restarted or stopped while this job was running. Please upload the file again."
 DOWNLOADS = {
     "transcript.txt": "text/plain; charset=utf-8",
     "notes.md": "text/markdown; charset=utf-8",
@@ -58,6 +63,8 @@ def job_response(job_id: str, storage=None) -> JobResponse:
     """Raises FileNotFoundError / StorageError when there is no such job."""
     storage = storage or get_storage()
     job = pipeline.load_job(job_id, storage)
+    if job.status in ("queued", "running") and job.updated_at and time.time() - job.updated_at > STALE_JOB_SEC:
+        job = job.model_copy(update={"status": "error", "error": f"{job.stage}: {STALE_MESSAGE}"})
     if job.status != "done":
         return JobResponse(**job.model_dump())
     statements = [Statement(**s) for s in _optional(job_id, "notes_final.json", storage, [])]
@@ -73,6 +80,10 @@ def create_job(background: BackgroundTasks, file: UploadFile = File(...)):
     if suffix not in pipeline.ALLOWED_EXTENSIONS:
         raise HTTPException(status_code=400, detail=f"Unsupported file type {suffix or '(none)'}. Use one of: "
                                                     + ", ".join(sorted(pipeline.ALLOWED_EXTENSIONS)))
+    if suffix in pipeline.AUDIO_EXTENSIONS:
+        ok, reason = transcribe.audio_available()
+        if not ok:
+            raise HTTPException(status_code=400, detail=reason)
     limit = MAX_UPLOAD_MB * 1024 * 1024
     data = file.file.read(limit + 1)
     if len(data) > limit:

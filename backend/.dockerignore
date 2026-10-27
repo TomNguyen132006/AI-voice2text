@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.data/
+tests/
+golden/
+parakeet/
+.env
+.env.*
+*.mp3
+*.wav
+*.m4a
+*.mp4

@@ -38,7 +38,7 @@ def output_urls(job_id: str) -> JobOutputs:
 
 
 def save_job(job: Job, storage=None) -> None:
-    save_json(job_key(job.id, "job.json"), job.model_dump(), storage)
+    save_json(job_key(job.id, "job.json"), job.model_copy(update={"updated_at": time.time()}).model_dump(), storage)
 
 
 def load_job(job_id: str, storage=None) -> Job:

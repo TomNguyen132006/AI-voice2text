@@ -95,6 +95,23 @@ After changing `NEXT_PUBLIC_API_URL` on Vercel, redeploy the frontend (`NEXT_PUB
 after that takes extra time to wake it. Open `<backend URL>/health` and wait for
 `{"status":"ok"}` **before recording the demo video and before submission**.
 
+### Deploying the real pipeline (Epic 9)
+
+What is done in the repo: `backend/Dockerfile` (python 3.12 + ffmpeg, starts on `$PORT`), `backend/.dockerignore`, the new variables in `.env.example`, an early "audio not supported here" answer, and a stale-job check. What needs your accounts is listed under "To do by hand".
+
+**Backend environment** (set on the host, never in git): `NEBIUS_API_KEY`, `TAVILY_API_KEY`, `FRONTEND_ORIGINS`, and for storage that survives a restart `STORAGE_BACKEND=s3` with `S3_ENDPOINT_URL`, `S3_REGION`, `S3_BUCKET`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`. Without them the backend still works with `STORAGE_BACKEND=local`, but jobs and files are lost when the instance restarts or sleeps.
+
+**What the deployed backend can and cannot do.** It has no GPU and no NeMo, so **it cannot transcribe audio**: `POST /jobs` answers 400 for audio/video with "upload a transcript instead" (checked by `transcribe.audio_available()`), and takes `.txt`, `.srt` and `.vtt`. Audio works only on a machine with the Parakeet environment (`TRANSCRIBE_ENGINE=local`), or with `TRANSCRIBE_ENGINE=fake` for a dry run. A remote Parakeet engine is **not built**; if Token Factory or a Nebius GPU endpoint serves Parakeet, it is one more class in `transcribe.py` (`ENGINES`).
+**Jobs are background tasks of the web process.** If the instance restarts or the free Render instance falls asleep mid-job, the job cannot continue: after `STALE_JOB_MINUTES` (45) without a save, `GET /jobs/{id}` reports it as an error ("upload the file again"). Polling from the open page keeps a free instance awake while a job runs.
+
+**S9-3 secrets check (done Oct 27).** Scanned the whole git history (`git log --all -p`) for key shapes (`tvly-`, `nvapi-`, `sk-`, `AKIA`, JWTs, `NEBIUS_API_KEY=`/`TAVILY_API_KEY=`/`AWS_SECRET_ACCESS_KEY=` with a value, long `v1.` tokens) and for any committed `.env` file. Result: no `.env` was ever committed (only `.env.example` files, with empty values), and the only match is the fake string `tvly-SECRETSECRETSECRET1234` in `backend/tests/test_validate.py`, a test that checks keys are hidden. This was a pattern search, not a dedicated scanner (gitleaks/trufflehog); run one before submission if you want more certainty, and rotate the keys if they were ever pasted anywhere public.
+
+**To do by hand (needs your accounts; not done):**
+1. Create a Nebius Object Storage bucket and access keys, and set the `S3_*` / `AWS_*` variables on the backend host.
+2. Set `NEBIUS_API_KEY`, `TAVILY_API_KEY` on the backend host. Check that `FRONTEND_ORIGINS` has the Vercel URL, and redeploy the frontend after changing `NEXT_PUBLIC_API_URL`.
+3. Redeploy: the current Render service uses the plain Python runtime (no ffmpeg), which is fine for transcript uploads. For ffmpeg (or Nebius Serverless Endpoint) deploy `backend/Dockerfile`; **the Dockerfile has not been built** (no Docker on the dev machine).
+4. Run one real job on the live URLs and look at the result in a browser. S0-6 (are third-party search APIs allowed, credit limits) is still unanswered in `context/epic.md`.
+
 ## How we use NVIDIA models and Nebius
 
 | Step | Model / tool | Where it runs |

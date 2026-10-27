@@ -15,6 +15,7 @@ Manual test:
     python transcribe.py lecture.mp3 out.json --engine fake    (any machine)
     python transcribe.py lecture.mp3 out.json                  (machine with the Parakeet env)
 """
+import importlib.util
 import os
 import tempfile
 import time
@@ -82,6 +83,16 @@ class FakeEngine:
 
 
 ENGINES = {"local": ParakeetLocalEngine, "fake": FakeEngine}
+
+
+def audio_available() -> tuple[bool, str]:
+    """Can THIS server transcribe audio? (ok, reason). The deployed backend has no GPU and no NeMo, so it can only take transcripts."""
+    name = (os.getenv("TRANSCRIBE_ENGINE") or "local").strip().lower()
+    if name == "fake":
+        return True, ""
+    if name == "local" and importlib.util.find_spec("nemo") is None:
+        return False, "This server cannot transcribe audio (no GPU engine installed). Upload a transcript (.txt, .srt or .vtt) instead."
+    return True, ""
 
 
 def get_engine():

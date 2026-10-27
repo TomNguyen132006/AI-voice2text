@@ -129,6 +129,7 @@ class Job(BaseModel):
     stage: JobStage
     error: Optional[str] = None
     outputs: JobOutputs = JobOutputs()
+    updated_at: Optional[float] = None  # unix time of the last save; lets the API spot a job whose server died (Epic 9)
 
 
 class JobResponse(Job):
