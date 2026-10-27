@@ -17,7 +17,7 @@ Built for the Nebius x NVIDIA Global AI Hackathon (track: Best Apps and Agents).
 > sections and the cost of the job). **Epic 3 done (Oct 22):** gap finder `gaps.py` (S3-1) and web search `enrich.py` (S3-2 wrapper, S3-3 cache,
 > S3-4 cap), both run live. Not proven live: the 429/5xx paths and the content quality of the search results.
 > **Epic 4 done:** `validate.py` (S4-3), notes writer `notes.py` (S4-1), slide writer `slides.py` (S4-2) and the copy check `check_sources.py`; the notes prompt v3 is the
-> baseline. **Epic 5 written, not yet run live:** `judge.py` (S5-1, S5-2) and `fix.py` (S5-3, S5-4). See "Epic 4 status" below.
+> baseline. **Epics 6 and 7 written (Oct 27), nothing run with the real models yet; see "Output files, pipeline, Job API and frontend" below.** **Epic 5 written, not yet run live:** `judge.py` (S5-1, S5-2) and `fix.py` (S5-3, S5-4). See "Epic 4 status" below.
 > Sections marked _TBD_ are filled in as we build.
 
 ## Repo structure
@@ -552,6 +552,20 @@ Files: `notes_final.json` (survivors, original ids), `fix_log.json` (old text, n
 **Epic 4 spend, from the call log** (`backend/.data/logs/calls.jsonl`, stages `notes_writer` and `slide_writer`): 15 calls, **$0.0412** (notes 9 calls $0.0372, slides 6 calls $0.0040), no errors, no retries.
 **Project total from the same log, all stages:** 142 calls, **$0.2276** (cleaning $0.1510, topic split $0.0232, gap finder $0.0119, notes $0.0372, slides $0.0040, smoke test $0.0003);
 a lower bound, because 2 timed-out cleaning attempts have no cost. Tavily is not in this number (credits: 26 of 1000 used before Epic 4).
+
+## Output files, pipeline, Job API and frontend (Epics 6 and 7)
+
+**Output files (`backend/export.py`, S6-1..S6-4).** Built by code only, no model call: `transcript.txt` (cleaned transcript, `[mm:ss]` per segment), `notes.md` (the statements that survived the judge, grouped by section, every point ends with 📍 lecture time range and 🌐 web link), `slides.pptx` (python-pptx: title slide, one slide per section with bullets + source tags + example + speaker notes, final "Sources" slide with the web links as real hyperlinks), and one `.zip` with the three files (built on download). Run: `python -m export <job_id>`. Tested by reading the files back with `python-pptx`; **not yet opened in real PowerPoint or Google Slides** (S6-3 asks for that).
+
+**Pipeline (`backend/pipeline.py`, S7-7).** `run_pipeline` runs transcribe (or a .txt/.srt/.vtt upload) -> clean -> split -> gaps -> web search -> notes -> judge + fix -> slides -> export, and writes `jobs/{id}/job.json` after every stage (`transcribing, cleaning, enriching, writing, judging, exporting`). The slides are built from `notes_final.json`, so only statements the judge kept reach the slides. A failing stage makes the job `error` with `"<stage>: <message>"` (keys scrubbed, 300 characters at most). A failing web search is only a warning (the notes then rest on the lecture alone). `pipeline_report.json` has seconds per stage, warnings and the model-call totals. Tested end to end with a fake model that answers every stage; **never run with the real models yet.**
+
+**Job API (`backend/jobs_api.py`, S7-2).** Same format as the old mock (`mock_jobs.py` is kept but no longer mounted); `JobResponse` got two optional fields, `sections` and `summary`.
+`POST /jobs` (multipart `file`; audio/video or .txt/.srt/.vtt, max `MAX_UPLOAD_MB`=500; the pipeline runs as a FastAPI background task, the planned fallback to Nebius Serverless Jobs), `GET /jobs/{id}`, `GET /jobs/{id}/files/{transcript.txt|notes.md|slides.pptx|all.zip}`, and `POST /jobs/sample`.
+Limits to know: background tasks die with the server process, and a job that was `running` when the server restarted stays `running` forever (no recovery yet).
+
+**Sample lecture (S7-6).** `POST /jobs/sample` builds a finished job from `backend/samples/` (a short, hand-written gradient-descent lecture) and the results page says so. It is **not model output**; use it to show the layout and the downloads in seconds.
+
+**Frontend (`frontend/app/`).** One page: drag-and-drop upload with type and size checks (S7-1), a progress list that polls every 2 s (S7-3), results grouped by section with a 📍 button (shows the lecture time range) and 🌐 links that open the source (S7-4), a judge summary, download buttons and a zip button, readable error messages (S7-5), and "Try a sample lecture" (S7-6). Plain Tailwind components, not shadcn/ui. `npm run build` and `eslint` pass; **we have not looked at the page in a browser yet.** Set `NEXT_PUBLIC_API_URL` for a deployed backend.
 
 ## How sources work
 
