@@ -18,6 +18,7 @@ Built for the Nebius x NVIDIA Global AI Hackathon (track: Best Apps and Agents).
 > S3-4 cap), both run live. Not proven live: the 429/5xx paths and the content quality of the search results.
 > **Epic 4 done:** `validate.py` (S4-3), notes writer `notes.py` (S4-1), slide writer `slides.py` (S4-2) and the copy check `check_sources.py`; the notes prompt v3 is the
 > baseline. **Epics 6 and 7 written (Oct 27), nothing run with the real models yet; see "Output files, pipeline, Job API and frontend" below.** **Epic 5 written, not yet run live:** `judge.py` (S5-1, S5-2) and `fix.py` (S5-3, S5-4). See "Epic 4 status" below.
+> **What still has to be done for the app to work (keys, first real run, audio, deploy, submission): see [docs/TODO_TO_RUN.md](docs/TODO_TO_RUN.md).**
 > Sections marked _TBD_ are filled in as we build.
 
 ## Repo structure
