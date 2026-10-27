@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from mock_jobs import router as mock_jobs_router
+from jobs_api import router as jobs_router
 
 load_dotenv()
 
@@ -18,7 +18,7 @@ app.add_middleware(
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
-app.include_router(mock_jobs_router)
+app.include_router(jobs_router)
 
 
 @app.get("/")

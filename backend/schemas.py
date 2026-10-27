@@ -132,6 +132,11 @@ class Job(BaseModel):
 
 
 class JobResponse(Job):
-    """What GET /jobs/{id} returns: the Job, plus the statements once it is done."""
+    """What GET /jobs/{id} returns: the Job, plus the statements once it is done.
+
+    sections (titles and time ranges, to group the statements) and summary (how many statements the
+    judge kept, fixed and dropped, from judge_report.json) were added in Epic 7; both are optional."""
 
     statements: list[Statement] = []
+    sections: list[Section] = []
+    summary: dict = {}
