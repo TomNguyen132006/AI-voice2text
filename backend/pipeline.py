@@ -19,6 +19,7 @@ import time
 from pathlib import Path
 
 import llm
+import stats
 from schemas import Job, JobOutputs
 from storage import get_storage, job_key, load_json, save_json, save_transcript
 from validate import _clip
@@ -151,5 +152,6 @@ def _save_report(job_id, storage, job, seconds, started, warnings) -> None:
             "seconds_per_stage": seconds, "total_seconds": round(time.time() - started, 1),
             "model_calls": llm.summarize_log(job_id=job_id),
         }, storage)
+        save_json(job_key(job_id, "call_stats.json"), stats.call_stats(job_id), storage)  # survives a restart (the log is local)
     except Exception:  # the report is a bonus: it must never hide the real result
         pass

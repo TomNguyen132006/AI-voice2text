@@ -567,6 +567,12 @@ Limits to know: background tasks die with the server process, and a job that was
 
 **Frontend (`frontend/app/`).** One page: drag-and-drop upload with type and size checks (S7-1), a progress list that polls every 2 s (S7-3), results grouped by section with a 📍 button (shows the lecture time range) and 🌐 links that open the source (S7-4), a judge summary, download buttons and a zip button, readable error messages (S7-5), and "Try a sample lecture" (S7-6). Plain Tailwind components, not shadcn/ui. `npm run build` and `eslint` pass; **we have not looked at the page in a browser yet.** Set `NEXT_PUBLIC_API_URL` for a deployed backend.
 
+## Logging and stats (Epic 8)
+
+**Call log (S8-1, `llm.py`).** Every model call attempt is one JSONL row in `backend/.data/logs/calls.jsonl` (override with `LLM_LOG_PATH`): job id, stage, role, model id, attempt, status, latency in ms, prompt, completion and reasoning tokens, estimated cost (`null` = unknown, never counted as zero).
+
+**Stats (S8-2, `backend/stats.py`).** `GET /jobs/{id}/stats` returns calls, failed calls, tokens, model time and cost per stage and per model, seconds per pipeline stage, the judge's verdicts and rejection reasons (first 20, with the judge's one-sentence reason), what the rewrite loop fixed, and the web-search report. The pipeline saves the call sums as `jobs/{id}/call_stats.json` when a job ends, because the log file is local and a deployed server may lose it. The results page shows this in a collapsible "How this was made" panel. The sample job has no stats (nothing was run). **No real-model numbers exist yet**: the panel is tested with fake logs only.
+
 ## How sources work
 
 Every statement in the notes and slides must have a source: a lecture moment or a web page.

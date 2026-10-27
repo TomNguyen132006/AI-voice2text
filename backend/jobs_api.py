@@ -4,6 +4,7 @@
                                      The pipeline runs in a FastAPI background task (fallback from the plan: no Nebius job runner yet).
     POST /jobs/sample                a finished job from hand-written sample data (no model call), for the "Try a sample" button
     GET  /jobs/{id}                  status + stage; once done also the statements, the sections and a summary
+    GET  /jobs/{id}/stats            calls, tokens, time, cost per stage and the judge's rejections (S8-2)
     GET  /jobs/{id}/files/{name}     transcript.txt, notes.md, slides.pptx, or all.zip (the three files together)
 
 Job state lives in the job's storage (jobs/{id}/job.json), so it survives a restart and works with several workers.
@@ -17,6 +18,7 @@ from fastapi import APIRouter, BackgroundTasks, File, HTTPException, Response, U
 
 import export
 import pipeline
+import stats
 from schemas import Job, JobResponse, Section, Statement
 from storage import StorageError, get_storage, job_key, load_json, save_json
 
@@ -101,6 +103,16 @@ def create_sample_job():
 def get_job(job_id: str):
     try:
         return job_response(job_id)
+    except (FileNotFoundError, StorageError):
+        raise HTTPException(status_code=404, detail="Job not found")
+
+
+@router.get("/jobs/{job_id}/stats")
+def get_stats(job_id: str):
+    """Numbers for the stats panel: calls, tokens, time and cost per stage, judge rejections. {"available": false} if none yet."""
+    try:
+        pipeline.load_job(job_id)
+        return stats.job_stats(job_id)
     except (FileNotFoundError, StorageError):
         raise HTTPException(status_code=404, detail="Job not found")
 

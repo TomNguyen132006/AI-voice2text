@@ -93,3 +93,16 @@ def test_done_job_summary_comes_from_the_reports(client):
     pipeline.save_job(Job(id="job_done", status="done", stage="done", outputs=pipeline.output_urls("job_done")), storage)
     s = client.get("/jobs/job_done").json()["summary"]
     assert s == {"kept": 3, "fixed": 1, "dropped": 2, "total_seconds": 12.5, "model_calls": 9, "est_cost_usd": 0.5, "warnings": ["w"]}
+
+
+def test_stats_endpoint(client):
+    from storage import save_json
+
+    assert client.get("/jobs/job_nope/stats").status_code == 404
+    storage = get_storage()
+    pipeline.save_job(Job(id="job_st", status="done", stage="done"), storage)
+    assert client.get("/jobs/job_st/stats").json() == {"available": False}
+    save_json(job_key("job_st", "pipeline_report.json"), {"total_seconds": 5.0, "seconds_per_stage": {"writing": 2.0}}, storage)
+    save_json(job_key("job_st", "call_stats.json"), {"total": {"calls": 3}}, storage)
+    body = client.get("/jobs/job_st/stats").json()
+    assert body["available"] is True and body["total_seconds"] == 5.0 and body["calls"] == {"total": {"calls": 3}}

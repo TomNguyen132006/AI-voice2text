@@ -78,7 +78,7 @@ def test_full_run_on_a_transcript_upload(tmp_path):
     assert job.status == "done" and job.stage == "done" and job.error is None
     assert job.outputs.txt == "/jobs/job_p1/files/transcript.txt"
     for name in ["transcript.json", "transcript_clean.json", "sections.json", "gaps.json", "search.json", "notes.json",
-                 "judge.json", "notes_final.json", "slides.json", "transcript.txt", "notes.md", "slides.pptx", "pipeline_report.json"]:
+                 "judge.json", "notes_final.json", "slides.json", "transcript.txt", "notes.md", "slides.pptx", "pipeline_report.json", "call_stats.json"]:
         storage.load_bytes(job_key("job_p1", name))  # raises FileNotFoundError if a stage forgot to save
     assert pipeline.load_job("job_p1", storage).status == "done"
     final = load_json(job_key("job_p1", "notes_final.json"), storage)
@@ -89,6 +89,8 @@ def test_full_run_on_a_transcript_upload(tmp_path):
     assert titles[1] == "Gradient and steps"
     report = load_json(job_key("job_p1", "pipeline_report.json"), storage)
     assert set(report["seconds_per_stage"]) == set(pipeline.STAGES) and report["model_calls"]["total_calls"] > 0
+    stats_saved = load_json(job_key("job_p1", "call_stats.json"), storage)
+    assert stats_saved["by_stage"]["judge"]["calls"] == 1 and stats_saved["total"]["calls"] == report["model_calls"]["total_calls"]
     # only ONE uploaded copy plus derived files: the upload is kept for re-runs
     assert storage.load_bytes(pipeline.upload_key("job_p1", "lecture.srt")) == SRT.encode("utf-8")
 

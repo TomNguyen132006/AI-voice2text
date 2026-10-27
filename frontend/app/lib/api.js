@@ -43,7 +43,8 @@ export function createJob(file) {
 }
 
 export const createSampleJob = () => request('/jobs/sample', { method: 'POST' })
-export const getJob = (id) => request(`/jobs/${encodeURIComponent(id)}`, { cache: 'no-store' })
+export const getStats = (id) => request(`/jobs/${encodeURIComponent(id)}/stats`, { cache: 'no-store' })
+export const getJob =(id) => request(`/jobs/${encodeURIComponent(id)}`, { cache: 'no-store' })
 
 // Download links: the backend returns paths like /jobs/{id}/files/notes.md
 export const fileUrl = (path) => `${API_URL}${path}`

@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { clock, fileUrl, zipUrl } from '../lib/api'
+import StatsPanel from './StatsPanel'
 
 function LectureCitation({ source }) {
   const [open, setOpen] = useState(false)
@@ -91,6 +92,7 @@ export default function ResultsView({ job, onReset }) {
         </button>
       </div>
       <Summary summary={job.summary || {}} count={job.statements.length} />
+      <StatsPanel jobId={job.id} />
       <div className="flex flex-wrap gap-2">
         <a href={zipUrl(job.id)} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
           Download all (.zip)
