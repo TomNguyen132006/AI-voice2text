@@ -17,7 +17,7 @@ Built for the Nebius x NVIDIA Global AI Hackathon (track: Best Apps and Agents).
 > sections and the cost of the job). **Epic 3 done (Oct 22):** gap finder `gaps.py` (S3-1) and web search `enrich.py` (S3-2 wrapper, S3-3 cache,
 > S3-4 cap), both run live. Not proven live: the 429/5xx paths and the content quality of the search results.
 > **Epic 4 done:** `validate.py` (S4-3), notes writer `notes.py` (S4-1), slide writer `slides.py` (S4-2) and the copy check `check_sources.py`; the notes prompt v3 is the
-> baseline. **Epic 5 started:** `judge.py` (S5-1, S5-2) is written and tested, not yet run live. See "Epic 4 status" below.
+> baseline. **Epic 5 written, not yet run live:** `judge.py` (S5-1, S5-2) and `fix.py` (S5-3, S5-4). See "Epic 4 status" below.
 > Sections marked _TBD_ are filled in as we build.
 
 ## Repo structure
@@ -524,7 +524,21 @@ Ultra (a separate call, so no model grades its own work) checks every statement 
 
 Files: `jobs/{id}/judge.json` (`[{statement_id, verdict, reason, by}]`, `by` = code / ultra / none) and `judge_report.json` (counts per verdict, rejections with reasons, flagged sections, calls, tokens, cost). Limits are in `judge_config.py`; the model comes from role `ultra` in `llm_config.py`.
 
-**Status:** code and 16 tests (fake client) done. **Not proven live:** no real Ultra call has been made yet, so we have no numbers for prompt quality, false rejects, latency or cost. Not done: fix-or-remove loop (S5-3), a report across the whole job (S5-4), judging the slides.
+### Fix-or-remove loop and final report (S5-3, S5-4, `backend/fix.py`)
+
+Run: `python -m fix <job_id> [statements_file]` (from `backend/`; it reuses `judge.json` when it matches the statements, else runs the judge first).
+
+| First verdict | What happens |
+|---|---|
+| `pass` | kept as it is |
+| `unsupported`, `contradicts` | Super rewrites it ONCE from its own cited sources (same id, section and sources, only the text changes; no new facts, no urls). The rewrite goes through the code checks and Ultra again: `pass` -> the new text is kept, anything else -> dropped (`still_unsupported`, ...). No third round. |
+| `no_source`, `bad_source`, `unknown_url` | dropped (the source is the problem, a new text cannot help) |
+| `unjudged` | kept and marked `kept_unjudged` (the judge failed, not the statement) |
+
+If Super fails, answers with an empty text or returns the same text, the statement is dropped (`fixer_failed`, `fixer_gave_up`, `fixer_no_change`).
+Files: `notes_final.json` (survivors, original ids), `fix_log.json` (old text, new text, both verdicts and reasons, outcome) and `judge_report.json`, which now also holds `fix` (second round) and `final`: kept / passed first time / fixed / kept unjudged / dropped by reason, total calls and cost over all rounds. These are the numbers for the Devpost write-up.
+
+**Status:** `judge.py` (16 tests) and `fix.py` (12 tests) done with a fake client. **Not proven live:** no real Ultra or fixer call has been made yet, so we have no numbers for prompt quality, false rejects, how many rewrites really pass, latency or cost. Not done: judging the slides, and wiring `notes_final.json` into the exports.
 
 ## Epic 4 status (Oct 23)
 
