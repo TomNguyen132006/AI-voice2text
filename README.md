@@ -17,7 +17,7 @@ Built for the Nebius x NVIDIA Global AI Hackathon (track: Best Apps and Agents).
 > sections and the cost of the job). **Epic 3 done (Oct 22):** gap finder `gaps.py` (S3-1) and web search `enrich.py` (S3-2 wrapper, S3-3 cache,
 > S3-4 cap), both run live. Not proven live: the 429/5xx paths and the content quality of the search results.
 > **Epic 4 done:** `validate.py` (S4-3), notes writer `notes.py` (S4-1), slide writer `slides.py` (S4-2) and the copy check `check_sources.py`; the notes prompt v3 is the
-> baseline. Next: Epic 5 (judge). See "Epic 4 status" below.
+> baseline. **Epic 5 started:** `judge.py` (S5-1, S5-2) is written and tested, not yet run live. See "Epic 4 status" below.
 > Sections marked _TBD_ are filled in as we build.
 
 ## Repo structure
@@ -513,6 +513,18 @@ ORIGINAL `transcript.json`; (d) every slide bullet equals its statement in `note
 `example_statement_id` in `slides_report.json`, and that statement is not also a bullet. It does NOT check that a statement is true or supported by its source (the judge, Epic 5).
 Run on job_e2e_20261019_130712: a 27/27, b 8/8, c 40/40, d 8/8, e 3/3 passed. (The first run showed e failing, only because the old `slides_report.json` was made before
 `example_statement_id` existed; the report was rebuilt from the saved live results, with no model call, and `slides.json` stayed identical.)
+
+## Judge (S5-1, S5-2, `backend/judge.py`)
+
+Ultra (a separate call, so no model grades its own work) checks every statement of `notes.json`. Run: `python -m judge <job_id> [statements_file]` (from `backend/`).
+
+1. **Code checks first (S5-2, no tokens).** A statement is rejected before any model call when it has no source (`no_source`), a lecture source that does not exist, lies outside its segment or belongs to an unknown section (`bad_source`), or a web url that is not in `search.json` (`unknown_url`).
+2. **One Ultra call per section** for the rest. Ultra reads the ORIGINAL transcript of the section (to find contradictions) and, for each statement, only its cited sources (lecture text, web title + snippet; urls are never sent). Verdicts: `pass`, `unsupported` (a claim is not in the cited sources), `contradicts` (the lecture says the opposite). The web snippets are untrusted; the prompt tells Ultra to ignore instructions inside them.
+3. **Guards.** A statement the model skips, an unknown id or an unknown verdict word never becomes `pass`: it is `unjudged`. A section whose call fails (API error, or bad JSON twice via `validate.call_validated`) makes its statements `unjudged` and is flagged; other sections go on.
+
+Files: `jobs/{id}/judge.json` (`[{statement_id, verdict, reason, by}]`, `by` = code / ultra / none) and `judge_report.json` (counts per verdict, rejections with reasons, flagged sections, calls, tokens, cost). Limits are in `judge_config.py`; the model comes from role `ultra` in `llm_config.py`.
+
+**Status:** code and 16 tests (fake client) done. **Not proven live:** no real Ultra call has been made yet, so we have no numbers for prompt quality, false rejects, latency or cost. Not done: fix-or-remove loop (S5-3), a report across the whole job (S5-4), judging the slides.
 
 ## Epic 4 status (Oct 23)
 
