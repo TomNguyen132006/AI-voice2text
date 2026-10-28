@@ -1,9 +1,19 @@
 'use client'
 
 import { useRef, useState } from 'react'
-import { ALLOWED_EXTENSIONS, MAX_UPLOAD_MB, checkFile } from '../lib/api'
+import { ALLOWED_EXTENSIONS, MAX_TRANSCRIPT_CHARS, MAX_UPLOAD_MB, checkFile } from '../lib/api'
 
-// Start screen: pick a transcript (or the sample). Audio is still sent to the server, which answers 400 when it has no GPU.
+function UploadIcon() {
+  return (
+    <svg aria-hidden viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5" />
+      <path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" />
+    </svg>
+  )
+}
+
+// Start screen: pick a transcript (or the sample). Audio is still sent to the server, which answers 400 when it has no GPU,
+// and that answer is shown as a friendly message (see describeError).
 export default function UploadBox({ busy, fileName, waking, notice, onFile, onSample }) {
   const input = useRef(null)
   const [dragging, setDragging] = useState(false)
@@ -33,12 +43,22 @@ export default function UploadBox({ busy, fileName, waking, notice, onFile, onSa
           setDragging(false)
           if (!busy) pick(e.dataTransfer.files?.[0])
         }}
-        className={`flex min-h-44 cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed px-4 py-8 text-center transition-colors focus-within:outline-3 focus-within:outline-offset-2 focus-within:outline-accent ${
+        className={`flex min-h-56 cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed px-4 py-10 text-center transition-colors focus-within:outline-3 focus-within:outline-offset-2 focus-within:outline-accent ${
           dragging ? 'border-accent bg-accent-soft' : 'border-line-strong bg-surface hover:border-accent'
         } ${busy ? 'cursor-wait opacity-70' : ''}`}
       >
-        <span className="text-lg font-medium">{busy ? `Uploading ${fileName || 'your file'}…` : 'Drop a transcript here, or choose a file'}</span>
-        <span className="text-muted">.txt, .srt or .vtt, up to {MAX_UPLOAD_MB} MB</span>
+        <span className="text-accent">
+          <UploadIcon />
+        </span>
+        <span className="font-read text-xl font-semibold text-navy">
+          {busy ? `Uploading ${fileName || 'your file'}…` : 'Drop a transcript here'}
+        </span>
+        {!busy && (
+          <span className="btn btn-primary" aria-hidden>
+            Choose a file
+          </span>
+        )}
+        <span className="text-muted">.txt, .srt or .vtt</span>
         <input
           id="transcript-file"
           ref={input}
@@ -63,17 +83,16 @@ export default function UploadBox({ busy, fileName, waking, notice, onFile, onSa
         </p>
       )}
       {notice}
-      <ul className="list-disc space-y-1 pl-5 text-muted">
-        <li>There is no length limit. In our test, a 4-minute lecture took about 4 minutes to process.</li>
-        <li>Audio (.mp3, .wav, .mp4 and so on) is accepted only by a server with a GPU. If this one has none, you will be asked for a transcript.</li>
-      </ul>
-      <div className="flex flex-col gap-2 border-t border-line pt-6 sm:flex-row sm:items-center sm:gap-4">
-        <button
-          type="button"
-          onClick={onSample}
-          disabled={busy}
-          className="w-full rounded-lg border border-accent px-5 py-2.5 font-medium text-accent hover:bg-accent-soft disabled:opacity-50 sm:w-auto"
-        >
+      <dl className="grid gap-x-6 gap-y-3 text-muted sm:grid-cols-[auto_1fr]">
+        <dt className="font-semibold text-ink">Limits</dt>
+        <dd>
+          {MAX_UPLOAD_MB} MB and {MAX_TRANSCRIPT_CHARS.toLocaleString('en-US')} characters, about 20 minutes of speech. A 4-minute lecture took about 4 minutes to process.
+        </dd>
+        <dt className="font-semibold text-ink">Audio</dt>
+        <dd>Audio files (.mp3, .wav, .mp4 and so on) work only on a server with a GPU. If this one has none, you will be asked for a transcript.</dd>
+      </dl>
+      <div className="flex flex-col gap-3 border-t border-line pt-6 sm:flex-row sm:items-center sm:gap-4">
+        <button type="button" onClick={onSample} disabled={busy} className="btn btn-secondary w-full sm:w-auto">
           Try the sample
         </button>
         <p className="text-muted">Short hand-written data to show the layout. No model is called.</p>

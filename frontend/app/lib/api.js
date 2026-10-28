@@ -4,6 +4,8 @@ export const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000
 // Same list as the backend (pipeline.ALLOWED_EXTENSIONS) and the same size limit (MAX_UPLOAD_MB).
 export const ALLOWED_EXTENSIONS = ['.mp3', '.m4a', '.wav', '.mp4', '.webm', '.flac', '.ogg', '.aac', '.mov', '.mkv', '.txt', '.srt', '.vtt']
 export const MAX_UPLOAD_MB = 10
+// The server's default for MAX_TRANSCRIPT_CHARS (about 20 minutes of speech). The server answers 413 with its real limit when it is over.
+export const MAX_TRANSCRIPT_CHARS = 15000
 
 export function checkFile(file) {
   const dot = file.name.lastIndexOf('.')
@@ -122,7 +124,7 @@ export function describeError(error) {
     if (/transcribe audio|no gpu/i.test(error.detail || '')) {
       return {
         title: "This server can't transcribe audio",
-        message: 'It has no speech-to-text engine. Upload a transcript instead: a .txt, .srt or .vtt file.',
+        message: 'Audio needs a server with a GPU, and this one has none. Upload a transcript instead: a .txt, .srt or .vtt file.',
       }
     }
     return { title: "We can't use that file", message: detail || 'Check that it is a .txt, .srt or .vtt transcript and that it is not empty.' }
