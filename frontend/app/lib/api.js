@@ -95,10 +95,10 @@ export function domainOf(url) {
 // The six stages the API reports (Job.stage), with a short title and what happens inside.
 export const STAGES = [
   ['transcribing', 'Reading the file', 'Loading the transcript'],
-  ['cleaning', 'Cleaning', 'Fixing the transcript and splitting it by topic'],
-  ['enriching', 'Web search', 'Finding gaps in the lecture and searching the web for them'],
+  ['cleaning', 'Cleaning and topic split', 'Fixing the transcript, then splitting it by topic'],
+  ['enriching', 'Gap finder and web search', 'Finding terms a beginner needs, then searching the web for them'],
   ['writing', 'Notes', 'Writing the notes, each with its sources'],
-  ['judging', 'Judge', 'Checking every note against its source and rewriting the ones that fail'],
+  ['judging', 'Judge and fix', 'Checking every note against its sources and rewriting the ones that fail'],
   ['exporting', 'Slides and files', 'Writing the slides and the files to download'],
 ]
 const STAGE_TITLES = Object.fromEntries(STAGES.map(([key, title]) => [key, title]))
