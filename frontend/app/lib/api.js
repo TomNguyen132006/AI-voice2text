@@ -133,9 +133,14 @@ export function describeError(error) {
     return { title: 'This job was not found', message: 'The server may have restarted and lost it. Upload the file again.' }
   }
   if (status === 409) return { title: 'Not ready yet', message: 'The job is still running. Wait a moment and try again.' }
-  if (status === 413) return { title: 'That file is too large', message: detail || `Files can be up to ${MAX_UPLOAD_MB} MB.` }
+  if (status === 413) {
+    // The server says which limit it hit: the file size or the transcript length. Its sentence is shown as it is.
+    if (/characters|transcript/i.test(detail)) return { title: 'That transcript is too long', message: detail }
+    return { title: 'That file is too large', message: detail || `Files can be up to ${MAX_UPLOAD_MB} MB.` }
+  }
   if (status === 429) {
-    return { title: 'The server is busy', message: detail || 'Too many requests, or the daily limit was reached. Wait a few minutes and try again.' }
+    if (/daily/i.test(detail)) return { title: 'The daily limit is reached', message: detail }
+    return { title: 'The server is busy', message: detail || 'Too many requests. Wait a few minutes and try again.' }
   }
   if (status >= 500) return { title: 'The server had a problem', message: 'Try again in a minute. If it keeps happening, upload a smaller file.' }
   return { title: 'Something went wrong', message: 'Please try again.' }
