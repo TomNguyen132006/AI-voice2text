@@ -142,9 +142,10 @@ export default function StatsPanel({ stats, statements = [] }) {
                 <ul className="mt-2 flex flex-col gap-2 text-muted">
                   {judge.rejections.map((r) => (
                     <li key={r.statement_id}>
+                      {textOf[r.statement_id] ? 'First check failed for the note that now reads ' : 'First check failed for note '}
                       <span className="text-ink">“{clip(textOf[r.statement_id] || r.statement_id)}”</span>
                       <br />
-                      {VERDICT_LABELS[r.verdict] || r.verdict}
+                      The judge said {VERDICT_LABELS[r.verdict] || r.verdict}
                       {r.reason ? `: ${r.reason}` : ''}
                     </li>
                   ))}
