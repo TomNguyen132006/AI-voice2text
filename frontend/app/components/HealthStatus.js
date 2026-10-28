@@ -1,35 +1,55 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { API_URL } from '../lib/api'
+import { useAfter } from '../lib/hooks'
 
-// Set in frontend/.env.local (local) or in Vercel project settings (deployed).
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000'
-
+// Is the backend answering? The free Render plan sleeps and needs about 30 s to wake up.
 export default function HealthStatus() {
-  const [state, setState] = useState({ loading: true, data: null, error: null })
+  const [phase, setPhase] = useState('checking') // checking | ready | down
+  const [attempt, setAttempt] = useState(0)
+  const waking = useAfter(phase === 'checking', 6000)
 
   useEffect(() => {
-    fetch(`${API_URL}/health`)
+    let cancelled = false
+    fetch(`${API_URL}/health`, { cache: 'no-store' })
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         return res.json()
       })
-      .then((data) => setState({ loading: false, data, error: null }))
-      .catch((err) => setState({ loading: false, data: null, error: err.message }))
-  }, [])
+      .then(() => !cancelled && setPhase('ready'))
+      .catch(() => !cancelled && setPhase('down'))
+    return () => {
+      cancelled = true
+    }
+  }, [attempt])
+
+  const text =
+    phase === 'ready'
+      ? 'Server ready'
+      : phase === 'down'
+        ? "Can't reach the server."
+        : waking
+          ? 'The server is waking up. The first request on the free plan can take about 30 seconds.'
+          : 'Checking the server…'
+  const dot = phase === 'ready' ? 'bg-accent' : phase === 'down' ? 'bg-danger' : 'bg-line-strong'
 
   return (
-    <div className="rounded-lg border border-zinc-300 p-4 dark:border-zinc-700">
-      <p className="text-sm text-zinc-500">
-        Backend: <code>{API_URL}</code>
-      </p>
-      {state.loading && <p>Checking backend…</p>}
-      {state.data && (
-        <p className="text-green-600">
-          Backend says: <code>{JSON.stringify(state.data)}</code>
-        </p>
+    <p role="status" className="flex flex-wrap items-center gap-x-2">
+      <span aria-hidden className={`inline-block h-2.5 w-2.5 rounded-full ${dot}`} />
+      <span>{text}</span>
+      {phase === 'down' && (
+        <button
+          type="button"
+          onClick={() => {
+            setPhase('checking')
+            setAttempt((n) => n + 1)
+          }}
+          className="font-medium text-accent underline underline-offset-2"
+        >
+          Try again
+        </button>
       )}
-      {state.error && <p className="text-red-600">Cannot reach backend: {state.error}</p>}
-    </div>
+    </p>
   )
 }
