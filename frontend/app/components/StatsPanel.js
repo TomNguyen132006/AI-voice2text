@@ -1,8 +1,5 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { getStats } from '../lib/api'
-
 const STAGE_LABELS = {
   cleaning: 'Clean transcript',
   topic_split: 'Split by topic',
@@ -25,19 +22,7 @@ const VERDICT_LABELS = {
 const money = (n) => `$${n.toFixed(4)}`
 const seconds = (ms) => `${(ms / 1000).toFixed(1)} s`
 
-export default function StatsPanel({ jobId }) {
-  const [stats, setStats] = useState(null)
-
-  useEffect(() => {
-    let cancelled = false
-    getStats(jobId)
-      .then((s) => !cancelled && setStats(s))
-      .catch(() => !cancelled && setStats({ available: false }))
-    return () => {
-      cancelled = true
-    }
-  }, [jobId])
-
+export default function StatsPanel({ stats }) {
   if (!stats || !stats.available) return null
   const { calls, judge } = stats
   const total = calls.total
