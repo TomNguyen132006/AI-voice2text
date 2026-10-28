@@ -6,6 +6,7 @@ import { useAfter } from '../lib/hooks'
 import ErrorNotice from './ErrorNotice'
 import ProgressView from './ProgressView'
 import ResultsView from './ResultsView'
+import { HowItWorks, Values } from './Landing'
 import UploadBox from './UploadBox'
 
 const POLL_MS = 2000
@@ -49,13 +50,22 @@ function reducer(state, action) {
 function Loading() {
   return (
     <div role="status" aria-live="polite" className="flex flex-col gap-4">
-      <h2 className="font-read text-2xl font-semibold">Loading your notes…</h2>
+      <h2 className="text-3xl">Loading your notes…</h2>
       <div aria-hidden className="flex animate-pulse flex-col gap-3">
-        <div className="h-5 w-2/3 rounded bg-line" />
-        <div className="h-5 w-full rounded bg-line" />
-        <div className="h-5 w-5/6 rounded bg-line" />
+        <div className="h-5 w-2/3 rounded-full bg-accent" />
+        <div className="h-5 w-full rounded-full bg-accent" />
+        <div className="h-5 w-5/6 rounded-full bg-accent" />
       </div>
     </div>
+  )
+}
+
+// A job (running, failed or done) lives in one calm column; the start page has the hero.
+function Column({ children }) {
+  return (
+    <main id="story-main" tabIndex={-1} className="story-column py-8 pb-16">
+      {children}
+    </main>
   )
 }
 
@@ -142,46 +152,85 @@ export default function LectureApp() {
     setFailures(0)
   }
 
-  if (restoring) return <Loading />
-  if (job && job.status === 'done') return <ResultsView job={job} onReset={reset} />
+  if (restoring) {
+    return (
+      <Column>
+        <Loading />
+      </Column>
+    )
+  }
+  if (job && job.status === 'done') {
+    return (
+      <Column>
+        <ResultsView job={job} onReset={reset} />
+      </Column>
+    )
+  }
 
   if (job) {
     return (
-      <div className="flex flex-col gap-6">
-        <ProgressView job={job} log={log} waking={waking} />
-        {job.status === 'error' && <ErrorNotice {...describeJobFailure(job)} onRetry={reset} />}
-        {lost && job.status !== 'error' && (
-          <ErrorNotice
-            {...describeError({ kind: 'network' })}
-            onRetry={() => {
-              setFailures(0)
-              setTick((n) => n + 1)
-            }}
-            onSecondary={reset}
-            secondaryLabel="Start over"
-          />
-        )}
-      </div>
+      <Column>
+        <div className="flex flex-col gap-6">
+          <ProgressView job={job} log={log} waking={waking} />
+          {job.status === 'error' && <ErrorNotice {...describeJobFailure(job)} onRetry={reset} />}
+          {lost && job.status !== 'error' && (
+            <ErrorNotice
+              {...describeError({ kind: 'network' })}
+              onRetry={() => {
+                setFailures(0)
+                setTick((n) => n + 1)
+              }}
+              onSecondary={reset}
+              secondaryLabel="Start over"
+            />
+          )}
+        </div>
+      </Column>
     )
   }
 
   return (
-    <UploadBox
-      busy={busy}
-      fileName={fileName}
-      waking={waking && busy}
-      onFile={(file) => start(() => createJob(file), file.name)}
-      onSample={() => start(createSampleJob)}
-      notice={
-        error && (
-          <ErrorNotice
-            {...error}
-            onRetry={lastAction ? () => start(lastAction.create, lastAction.name) : reset}
-            onSecondary={lastAction ? reset : undefined}
-            secondaryLabel="Start over"
-          />
-        )
-      }
-    />
+    <main id="story-main" tabIndex={-1}>
+      <section className="story-hero story-wrap" aria-labelledby="hero-title">
+        <div className="story-hero-copy">
+          <p className="handwritten">notes with receipts ✦</p>
+          <h1 id="hero-title">
+            Your lecture, turned into notes <span className="marker">you can check.</span>
+          </h1>
+          <p className="story-lede">
+            Upload a lecture transcript or recording. You get notes, slides and sources, with every line tied to a timestamp or a link.
+          </p>
+          <p className="hero-note">
+            <strong>Source-checked</strong> means the cited source supports the statement. It does not check that the source itself is true.
+          </p>
+        </div>
+        <div className="story-hero-art">
+          <span className="story-sticker hero-sticker" aria-hidden="true">
+            source-checked
+          </span>
+          <div className="story-panel">
+            <UploadBox
+              busy={busy}
+              fileName={fileName}
+              waking={waking && busy}
+              onFile={(file) => start(() => createJob(file), file.name)}
+              onSample={() => start(createSampleJob)}
+              notice={
+                error && (
+                  <ErrorNotice
+                    {...error}
+                    onRetry={lastAction ? () => start(lastAction.create, lastAction.name) : reset}
+                    onSecondary={lastAction ? reset : undefined}
+                    secondaryLabel="Start over"
+                  />
+                )
+              }
+            />
+          </div>
+        </div>
+      </section>
+      <Values />
+      <HowItWorks />
+    </main>
   )
 }

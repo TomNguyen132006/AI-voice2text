@@ -32,7 +32,7 @@ export default function HealthStatus() {
         : waking
           ? 'The server is waking up. The first request on the free plan can take about 30 seconds.'
           : 'Checking the server…'
-  const dot = phase === 'ready' ? 'bg-accent' : phase === 'down' ? 'bg-danger' : 'bg-line-strong'
+  const dot = phase === 'ready' ? 'bg-coral' : phase === 'down' ? 'bg-destructive' : 'bg-control'
 
   return (
     <p role="status" className="flex flex-wrap items-center gap-x-2">
@@ -45,7 +45,7 @@ export default function HealthStatus() {
             setPhase('checking')
             setAttempt((n) => n + 1)
           }}
-          className="font-medium text-accent underline underline-offset-2"
+          className="story-link cursor-pointer"
         >
           Try again
         </button>

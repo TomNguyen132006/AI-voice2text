@@ -1,48 +1,109 @@
 @import "tailwindcss";
 
-/* Design tokens: a calm reading page, the same palette as the .pptx export. One accent (teal), navy headings, light only.
-   Contrast (WCAG, computed): ink on paper 13.9:1, navy on paper 13.6:1, muted on paper 5.1:1 (on white 5.5:1),
-   accent text on paper 5.7:1 (on white 6.1:1), white on the accent button 6.1:1, accent on the chip fill 5.3:1,
-   danger on its fill 6.4:1. The bright teal (3.1:1) is for graphics only (bars, dots), never for small text. */
+@custom-variant dark (&:is(.dark *));
+
+/* Design tokens, ported from the Narrator project: cream paper, forest ink, mint, peach and one coral accent.
+   The dark block follows Narrator's .dark palette. Contrast (WCAG, computed):
+   light: ink on paper 11.3:1, muted on paper 7.1:1, handwritten note on paper 5.5:1, ink on mint 9.3:1, ink on peach 8.7:1,
+          button text on coral 4.9:1, focus ring (coral) on paper 3.0:1, control border on paper 3.6:1.
+   dark:  ink on paper 13.9:1, muted on paper 7.9:1, links (primary) on paper 9.8:1, button text on coral 4.9:1,
+          handwritten note 9.5:1, control border on card 4.2:1. */
 :root {
   color-scheme: light;
-  --paper: #f7f8fa;
-  --surface: #ffffff;
-  --ink: #1f2933;
-  --navy: #0f2a4a;
-  --muted: #5b6b7f;
-  --line: #dde3ea;
-  --line-strong: #7b8794; /* borders of controls: 3.4:1 against the paper */
-  --accent: #0a6f64; /* dark teal: text, links, buttons */
-  --accent-hover: #075a51;
-  --accent-soft: #e3f4f1; /* chip and highlight fill */
-  --accent-ink: #075a51;
-  --teal: #0e9f8e; /* bright teal: graphics only */
-  --danger: #a3262a;
-  --danger-soft: #fbeceb;
+  --background: #fbf6ee;
+  --foreground: #1f3b2d;
+  --card: #fffefa;
+  --card-foreground: #1f3b2d;
+  --primary: #1f3b2d;
+  --primary-foreground: #ffffff;
+  --secondary: #f2ebdf;
+  --muted: #f2ebdf;
+  --muted-foreground: #3d5a4a;
+  --accent: #cfe6d6; /* mint */
+  --accent-foreground: #1f3b2d;
+  --peach: #ffd0b5;
+  --coral: #e8673f;
+  --coral-shadow: #b9482a;
+  --coral-ink: #13261b; /* text on coral */
+  --note: #ad4024; /* handwritten labels */
+  --sticker: #ffd94f;
+  --marker: #ffd0b5; /* highlighter behind one key word */
+  --marker-ink: #1f3b2d;
+  --border: #e6dccb;
+  --control: #8a826f; /* borders of inputs and drop zones: 3.6:1 */
+  --ring: #e8673f;
+  --destructive: #a32a1f;
+  --destructive-soft: #fbeceb;
+  --button-forest: #1f3b2d;
+  --button-forest-ink: #fbf6ee;
+  --button-forest-shadow: #10251a;
+  --how-bg: #1f3b2d; /* the dark "how it works" block */
+  --how-card: #2b4d3b;
+  --how-ink: #fbf6ee;
+  --how-muted: #e1eddf;
+  --how-note: #ffb38a;
+  --radius: 1rem;
+}
+
+.dark {
+  color-scheme: dark;
+  --background: #18211c;
+  --foreground: #e9ede3;
+  --card: #202b24;
+  --card-foreground: #e9ede3;
+  --primary: #b3ceb6;
+  --primary-foreground: #182b20;
+  --secondary: #2c392f;
+  --muted: #2b372f;
+  --muted-foreground: #abb6ab;
+  --accent: #2d3c32;
+  --accent-foreground: #d3e3cc;
+  --peach: #5a3b2e;
+  --coral: #e8673f;
+  --coral-shadow: #8f3519;
+  --coral-ink: #13261b;
+  --note: #ffb38a;
+  --sticker: #ffd94f;
+  --marker: #5a3b2e;
+  --marker-ink: #ffd0b5;
+  --border: #364339;
+  --control: #7a8f7f;
+  --ring: #b3ceb6;
+  --destructive: #ff8f85;
+  --destructive-soft: #3a2523;
+  --button-forest: #b3ceb6;
+  --button-forest-ink: #182b20;
+  --button-forest-shadow: #0b120e;
+  --how-bg: #1c271f;
+  --how-card: #263329;
+  --how-ink: #e9ede3;
+  --how-muted: #c4d1c4;
+  --how-note: #ffb38a;
 }
 
 @theme inline {
-  --color-paper: var(--paper);
-  --color-surface: var(--surface);
-  --color-ink: var(--ink);
-  --color-navy: var(--navy);
+  --font-sans: var(--font-story-body), ui-sans-serif, system-ui, sans-serif;
+  --font-serif: var(--font-story-heading), Georgia, serif;
+  --font-mono: var(--font-story-label), ui-monospace, monospace;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
   --color-muted: var(--muted);
-  --color-line: var(--line);
-  --color-line-strong: var(--line-strong);
+  --color-muted-foreground: var(--muted-foreground);
   --color-accent: var(--accent);
-  --color-accent-hover: var(--accent-hover);
-  --color-accent-soft: var(--accent-soft);
-  --color-accent-ink: var(--accent-ink);
-  --color-teal: var(--teal);
-  --color-danger: var(--danger);
-  --color-danger-soft: var(--danger-soft);
-}
-
-@theme {
-  /* System fonts only: nothing to download. Georgia for headings and notes, the system sans for controls. */
-  --font-read: Georgia, "Times New Roman", Times, serif;
-  --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --color-accent-foreground: var(--accent-foreground);
+  --color-peach: var(--peach);
+  --color-coral: var(--coral);
+  --color-note: var(--note);
+  --color-border: var(--border);
+  --color-control: var(--control);
+  --color-ring: var(--ring);
+  --color-destructive: var(--destructive);
+  --color-destructive-soft: var(--destructive-soft);
 }
 
 html {
@@ -51,79 +112,37 @@ html {
 }
 
 body {
-  background: var(--paper);
-  color: var(--ink);
-  font-family: var(--font-ui);
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-story-body), ui-sans-serif, system-ui, sans-serif;
   line-height: 1.6;
 }
 
-/* Headings are navy Georgia everywhere. */
+/* Headings use Gloock, balanced; paragraphs wrap prettily. */
 h1,
 h2,
 h3 {
-  font-family: var(--font-read);
-  color: var(--navy);
+  font-family: var(--font-story-heading), Georgia, serif;
+  font-weight: 400;
+  text-wrap: balance;
+  color: var(--foreground);
+}
+p {
+  text-wrap: pretty;
 }
 
 /* Visible keyboard focus everywhere. */
 :focus-visible {
-  outline: 3px solid var(--accent);
-  outline-offset: 2px;
+  outline: 3px solid var(--ring);
+  outline-offset: 4px;
   border-radius: 4px;
 }
 
-/* Skip link: hidden until it gets keyboard focus. */
-.skip-link {
-  position: absolute;
-  left: 1rem;
-  top: -4rem;
-  z-index: 10;
-  padding: 0.5rem 0.75rem;
-  background: var(--surface);
-  border: 2px solid var(--accent);
-  border-radius: 6px;
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
 }
-.skip-link:focus {
-  top: 1rem;
-}
-
-/* Buttons share one look. */
-.btn {
-  display: inline-flex;
-  min-height: 2.75rem;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  border-radius: 0.5rem;
-  padding: 0.5rem 1.25rem;
-  font-weight: 600;
-  line-height: 1.25;
-  text-align: center;
-  transition: background-color 0.15s, border-color 0.15s;
-}
-.btn-primary {
-  background: var(--accent);
-  color: #fff;
-  border: 1px solid var(--accent);
-}
-.btn-primary:hover {
-  background: var(--accent-hover);
-  border-color: var(--accent-hover);
-}
-.btn-secondary {
-  background: var(--surface);
-  color: var(--accent);
-  border: 1px solid var(--accent);
-}
-.btn-secondary:hover {
-  background: var(--accent-soft);
-}
-.btn:disabled,
-.btn[aria-disabled="true"] {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

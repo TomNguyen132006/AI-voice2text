@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { clock, domainOf, safeHttpUrl } from '../lib/api'
 
-const chip = 'inline-flex min-h-8 items-center gap-1.5 rounded-full px-3 py-1 text-sm font-medium'
+const chip = 'inline-flex min-h-9 items-center gap-1.5 rounded-full px-3.5 py-1 text-sm font-semibold'
 
 function ClockIcon() {
   return (
@@ -32,13 +32,13 @@ export function LectureChip({ source }) {
         onClick={() => setOpen((value) => !value)}
         aria-expanded={open}
         aria-label={`Lecture at ${clock(source.start)}, show details`}
-        className={`${chip} bg-accent-soft text-accent-ink hover:bg-[#cdeae5]`}
+        className={`${chip} cursor-pointer bg-accent text-accent-foreground hover:brightness-95`}
       >
         <ClockIcon />
         <span className="tabular-nums">{clock(source.start)}</span>
       </button>
       {open && (
-        <span className="text-sm text-muted">
+        <span className="text-sm text-muted-foreground">
           Said between {clock(source.start)} and {clock(source.end)} ({source.segment_id})
         </span>
       )}
@@ -52,7 +52,7 @@ export function WebChip({ source }) {
   const domain = domainOf(source.url)
   const label = source.title ? `${domain}: ${source.title}` : domain
   if (!href) {
-    return <span className={`${chip} border border-line-strong text-muted`}>{domain}</span>
+    return <span className={`${chip} border border-control text-muted-foreground`}>{domain}</span>
   }
   return (
     <a
@@ -61,7 +61,7 @@ export function WebChip({ source }) {
       rel="noopener noreferrer"
       title={source.title || domain}
       aria-label={`${label} (opens in a new tab)`}
-      className={`${chip} max-w-full border border-line-strong bg-surface text-ink hover:border-accent hover:text-accent-ink`}
+      className={`${chip} max-w-full border border-control bg-card text-foreground hover:border-coral hover:bg-peach/40`}
     >
       <LinkIcon />
       <span className="truncate">{domain}</span>
@@ -70,7 +70,7 @@ export function WebChip({ source }) {
 }
 
 const BADGES = {
-  checked: ['source-checked', 'The judge checked this note against its cited sources and they support it.'],
+  checked: ['source-checked', 'The judge checked this note against its cited sources and they support it. It does not check that the source itself is true.'],
   rewritten: ['rewritten', 'It failed the first check, was rewritten from its own sources, and passed the second check.'],
   unjudged: ['not judged', 'The judge gave no verdict for this note.'],
 }
@@ -79,9 +79,9 @@ const BADGES = {
 export function JudgeBadge({ kind }) {
   const [text, explain] = BADGES[kind]
   return (
-    <span title={explain} className="inline-flex items-center gap-1.5 text-sm font-medium text-muted">
-      <span aria-hidden className={`inline-block h-2 w-2 rounded-full ${kind === 'checked' ? 'bg-teal' : kind === 'rewritten' ? 'border-2 border-teal' : 'border-2 border-line-strong'}`} />
-      <span className={kind === 'unjudged' ? '' : 'text-accent-ink'}>{text}</span>
+    <span title={explain} className="story-label inline-flex items-center gap-1.5 text-muted-foreground normal-case">
+      <span aria-hidden className={`inline-block h-2.5 w-2.5 rounded-full ${kind === 'checked' ? 'bg-coral' : kind === 'rewritten' ? 'border-2 border-coral' : 'border-2 border-control'}`} />
+      <span className={kind === 'unjudged' ? '' : 'text-foreground'}>{text}</span>
       <span className="sr-only">. {explain}</span>
     </span>
   )
