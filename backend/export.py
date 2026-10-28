@@ -11,6 +11,7 @@ All of them are built from files the earlier stages saved, by code only (no mode
 Usage (from backend/):  python -m export <job_id>     (writes the three files next to the other job files)
 """
 import io
+import sys
 import zipfile
 
 from pptx import Presentation
@@ -55,11 +56,17 @@ def transcript_txt(segments: list[Segment]) -> str:
     return "\n".join(f"[{clock(s.start)}] {' '.join(s.text.split())}" for s in segments) + "\n"
 
 
-def notes_md(sections: list[Section], statements: list[Statement], title: str = "Lecture notes") -> str:
-    lines = [
-        f"# {title}", "",
-        "Every point ends with its source: 📍 a time range in the lecture recording, 🌐 a web link.", "",
-    ]
+NOT_JUDGED_LINE = ("**NOT JUDGED:** these notes did not go through the judge (no notes_final.json), "
+                   "so a point may not be supported by its source.")
+
+
+def notes_md(sections: list[Section], statements: list[Statement], title: str = "Lecture notes", judged: bool = True) -> str:
+    """judged=False (the statements come from notes.json, not notes_final.json) adds a visible NOT JUDGED line to the header."""
+    lines = [f"# {title}", ""]
+    if not judged:
+        lines += [NOT_JUDGED_LINE, ""]
+    lines += ["Every point ends with its source: 📍 a time range in the lecture recording, 🌐 a web link.", ""]
+    header = len(lines)
     for section in sections:
         own = [s for s in statements if s.section_id == section.id]
         if not own:
@@ -67,7 +74,7 @@ def notes_md(sections: list[Section], statements: list[Statement], title: str = 
         lines += [f"## {section.title}", f"_Lecture time {clock(section.start)} - {clock(section.end)}_", ""]
         lines += [f"- {' '.join(s.text.split())}  \n  {source_markdown(s)}" for s in own]
         lines.append("")
-    if len(lines) == 4:
+    if len(lines) == header:
         lines.append("_No statement passed the checks._")
     return "\n".join(lines).rstrip() + "\n"
 
@@ -153,12 +160,18 @@ def build_zip(files: dict[str, bytes]) -> bytes:
     return buffer.getvalue()
 
 
-def _load_statements(job_id: str, storage=None) -> list[Statement]:
+def _load_statements(job_id: str, storage=None) -> tuple[list[Statement], bool]:
+    """(statements, judged). notes_final.json is what the judge kept; without it we fall back to notes.json,
+    which was never judged: say so loudly (stderr here, and a NOT JUDGED line in notes.md)."""
     for name in ("notes_final.json", "notes.json"):
         try:
-            return [Statement(**s) for s in load_json(job_key(job_id, name), storage)]
+            statements = [Statement(**s) for s in load_json(job_key(job_id, name), storage)]
         except FileNotFoundError:
             continue
+        if name == "notes.json":
+            print(f"WARNING: {job_key(job_id, 'notes_final.json')} is missing, exporting notes.json, which was NOT JUDGED.",
+                  file=sys.stderr)
+        return statements, name == "notes_final.json"
     raise FileNotFoundError(job_key(job_id, "notes_final.json"))
 
 
@@ -172,11 +185,12 @@ def _load_clean(job_id: str, storage=None) -> list[Segment]:
 def export_job(job_id: str, storage=None) -> dict[str, str]:
     """Write transcript.txt, notes.md and slides.pptx into the job's storage; return {"txt": key, "md": key, "pptx": key}."""
     storage = storage or get_storage()
-    sections, statements = load_sections(job_id, storage), _load_statements(job_id, storage)
+    sections = load_sections(job_id, storage)
+    statements, judged = _load_statements(job_id, storage)
     slides = [Slide(**s) for s in load_json(job_key(job_id, "slides.json"), storage)]
     data = {
         "txt": transcript_txt(_load_clean(job_id, storage)).encode("utf-8"),
-        "md": notes_md(sections, statements).encode("utf-8"),
+        "md": notes_md(sections, statements, judged=judged).encode("utf-8"),
         "pptx": slides_pptx(slides),
     }
     keys = {}

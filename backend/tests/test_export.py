@@ -100,3 +100,27 @@ def test_export_job_writes_three_files(tmp_path):
     save_json(job_key("job_x1", "notes_final.json"), [STATEMENTS[0].model_dump()], storage)
     export.export_job("job_x1", storage)
     assert storage.load_bytes(keys["md"]).decode("utf-8").count("\n- ") == 1
+
+
+def test_notes_md_marks_notes_that_were_not_judged():
+    judged = export.notes_md(SECTIONS, STATEMENTS)
+    assert "NOT JUDGED" not in judged
+    unjudged = export.notes_md(SECTIONS, STATEMENTS, judged=False)
+    assert unjudged.splitlines()[2].startswith("**NOT JUDGED:**")  # right under the title, before the first section
+    assert unjudged.index("NOT JUDGED") < unjudged.index("## ")
+    assert "NOT JUDGED" in export.notes_md(SECTIONS, [], judged=False) and "No statement passed" in export.notes_md(SECTIONS, [], judged=False)
+
+
+def test_export_job_without_notes_final_warns_and_marks_the_md(tmp_path, capsys):
+    storage = LocalStorage(tmp_path)
+    save_transcript("job_x2", SEGMENTS, storage)
+    save_json(job_key("job_x2", "sections.json"), [s.model_dump() for s in SECTIONS], storage)
+    save_json(job_key("job_x2", "notes.json"), [s.model_dump() for s in STATEMENTS], storage)
+    save_json(job_key("job_x2", "slides.json"), [s.model_dump() for s in SLIDES], storage)
+    keys = export.export_job("job_x2", storage)
+    assert "NOT JUDGED" in capsys.readouterr().err
+    assert "NOT JUDGED" in storage.load_bytes(keys["md"]).decode("utf-8")
+    save_json(job_key("job_x2", "notes_final.json"), [STATEMENTS[0].model_dump()], storage)
+    export.export_job("job_x2", storage)
+    assert capsys.readouterr().err == ""
+    assert "NOT JUDGED" not in storage.load_bytes(keys["md"]).decode("utf-8")
