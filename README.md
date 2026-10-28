@@ -11,15 +11,35 @@ the lecture.
 
 Built for the Nebius x NVIDIA Global AI Hackathon (track: Best Apps and Agents).
 
-> Status: Epic 2 done (Oct 19). Transcription (S1), model layer `llm.py` (S2-1), cleaning `clean.py` (S2-2),
-> topic split `topics.py` (S2-3), long transcripts (S2-4), golden test `backend/golden/` (S2-5) and the
-> end-to-end entry point `python backend/run_epic2.py <transcript.json>` (clean + topic split, prints the
-> sections and the cost of the job). **Epic 3 done (Oct 22):** gap finder `gaps.py` (S3-1) and web search `enrich.py` (S3-2 wrapper, S3-3 cache,
-> S3-4 cap), both run live. Not proven live: the 429/5xx paths and the content quality of the search results.
-> **Epic 4 done:** `validate.py` (S4-3), notes writer `notes.py` (S4-1), slide writer `slides.py` (S4-2) and the copy check `check_sources.py`; the notes prompt v3 is the
-> baseline. **Epics 6 and 7 written (Oct 27), nothing run with the real models yet; see "Output files, pipeline, Job API and frontend" below.** **Epic 5 written, not yet run live:** `judge.py` (S5-1, S5-2) and `fix.py` (S5-3, S5-4). See "Epic 4 status" below.
-> **What still has to be done for the app to work (keys, first real run, audio, deploy, submission): see [docs/TODO_TO_RUN.md](docs/TODO_TO_RUN.md).**
-> Sections marked _TBD_ are filled in as we build.
+## Status (checked Oct 27, 2026)
+
+Labels: **PROVEN LIVE** = run with the real models, search API or server and the result was checked; **ONLY MOCKS** = tests with fake clients only;
+**NOT TESTED** = not run at all; **BROKEN** = fails. "One job" = `job_013207f9ae93`, a 4.4-minute lecture excerpt uploaded as `.srt` through `POST /jobs` on a local
+backend (250 s, $0.044, 19 model calls, 9 Tavily searches).
+
+| Epic | What | Status | Evidence and what is not covered |
+|---|---|---|---|
+| 0 Setup and contracts | repo, schemas, mock API, deploy skeleton | PROVEN LIVE | Render `/health` and the Vercel page answer 200. `schemas.py` got three optional fields later (`Job.updated_at`, `JobResponse.sections`, `JobResponse.summary`). |
+| 1 Transcription | Parakeet, transcript upload | PROVEN LIVE (local GPU only) | Parakeet ran on a local RTX 4060 (Oct 8, see "Parakeet local test environment"); not re-run on Oct 27. `.srt` import checked on one job: 36 cues, times and text identical to the source. The 60-minute audio test (S1-2) is NOT TESTED. |
+| 2 Model layer, cleaning, topic split | `llm.py`, `clean.py`, `topics.py` | PROVEN LIVE | Two real jobs. One Nano cleaning call was cut off at 20000 tokens and retried (118 s). |
+| 3 Enrichment | gap finder, web search | PROVEN LIVE | 9 Tavily searches, 0 errors. The 429/5xx paths are ONLY MOCKS. |
+| 4 Notes and slides | `notes.py`, `slides.py`, `check_sources.py` | PROVEN LIVE | Two real jobs. Slides are short: 1-5 bullets each, the rest goes to speaker notes. |
+| 5 Judge | `judge.py`, `fix.py` | PROVEN LIVE (one run) | Ultra judged 37 statements in two jobs (33 pass, 4 unsupported). One unsupported statement was rewritten once and passed. Code checks (`no_source`, `bad_source`, `unknown_url`) and the drop paths are ONLY MOCKS. The judge has no "weakly supported / speech recognition difference" level. |
+| 6 Output files | `.txt`, `.md`, `.pptx`, `.zip` | PROVEN LIVE (`.txt`, `.md`); NOT TESTED (`.pptx` in PowerPoint and Google Slides) | The `.pptx` was only read back with python-pptx. |
+| 7 Frontend and Job API | pipeline, `/jobs` API, Next.js page | PROVEN LIVE (pipeline and API, local); NOT TESTED (page in a browser, Job API on Render) | Every endpoint answered as expected on a local backend. `npm run build` and `eslint` pass. |
+| 8 Logging and stats | call log, `/jobs/{id}/stats` | PROVEN LIVE (log, endpoint); NOT TESTED (stats panel in a browser) | Numbers come from `backend/.data/logs/calls.jsonl`. |
+| 9 Deployment | Dockerfile, audio refusal, stale-job check, storage | PROVEN LIVE (audio refusal: `POST /jobs` answers 400 for audio without a GPU engine); NOT TESTED (Dockerfile never built, S3 storage); ONLY MOCKS (stale-job check) | Next.js is on 16.4.3 (0 npm advisories; 16.4.0 had 2 critical and 1 high). |
+
+**Known limits**
+- Audio works only on a local GPU machine (Parakeet needs NeMo and an NVIDIA GPU). The deployed backend has no GPU engine and accepts transcripts only (`.txt`, `.srt`, `.vtt`).
+- The judge evidence is one run: 37 statements in two jobs, no repeat, no comparison with a human check.
+- Jobs and files are lost when the Render instance restarts or sleeps, unless S3 storage is configured (not tested).
+- Render free tier cold start: about 33 s for the first request after sleep.
+- `POST /jobs` has a file-size limit (`MAX_UPLOAD_MB`, 500) but no login, rate limit, transcript-length limit or limit on concurrent jobs.
+- Token Factory lists 30 models (Oct 27) and none of them is a speech model, so a remote Parakeet engine through Token Factory is not available.
+
+**What still has to be done for the app to work (keys, first run on the live URLs, audio, deploy, submission): see [docs/TODO_TO_RUN.md](docs/TODO_TO_RUN.md).**
+Sections marked _TBD_ are filled in as we build. Some older sections below still say "not proven live"; the table above is the current state.
 
 ## Repo structure
 
