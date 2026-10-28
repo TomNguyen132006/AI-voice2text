@@ -3,14 +3,17 @@
 Usage (from backend/):  python -m check_sources <job_id>      (exit code 1 when a check fails)
 
 Reads jobs/{id}/notes.json, search.json, transcript.json (the ORIGINAL transcript), and, when they exist,
-slides.json and slides_report.json. Works on the raw JSON so a missing key is a failure, not a default.
+slides.json, slides_report.json and notes_final.json. Works on the raw JSON so a missing key is a failure, not a default.
+Slides are built from notes_final.json (the statements the judge kept, some of them rewritten), so checks d and e compare
+against notes_final.json when it exists and against notes.json otherwise. Checks a, b and c always read notes.json.
 Checks (each counts passed/failed per item, the first 5 failures are printed):
   a  has_source           every statement has at least one source
   b  web_in_search        every web source: its url is in search.json (exact match) with the same title
                           (the raw title, or the title with urls removed, which is what notes.py stores)
   c  lecture_matches_original  every lecture source has segment_id, start and end, equal to transcript.json
   d  bullets_match_notes  every slide bullet has the text, section and sources of the statement with its id
-  e  example_matches_notes    the slide example equals the text of the statement named in
+                          (in notes_final.json when it exists, else notes.json)
+  e  example_matches_notes    the slide example equals the text of the statement (same file as d) named in
                           slides_report.json (example_statement_id), and that statement is not also a bullet
 These checks prove that texts, times and links were COPIED correctly. They say nothing about whether a
 statement is TRUE or supported by its source: that is the judge's job (Epic 5).
@@ -65,8 +68,9 @@ def check_job(job_id: str, storage=None) -> dict:
     original = load_json(job_key(job_id, "transcript.json"), storage)
     slides = _optional(job_id, "slides.json", storage)
     slides_report = _optional(job_id, "slides_report.json", storage)
+    final = _optional(job_id, "notes_final.json", storage)
     result = {key: _new() for key in CHECKS}
-    by_id = {st.get("id"): st for st in notes}
+    by_id = {st.get("id"): st for st in (notes if final is None else final)}  # what the slides were built from (checks d, e)
     segments = {seg["id"]: seg for seg in original}
     titles = _web_titles(search) if search is not None else None
 
@@ -106,7 +110,7 @@ def check_job(job_id: str, storage=None) -> dict:
         for b in slide.get("bullets", []):
             st = by_id.get(b.get("id"))
             if st is None:
-                _record(result["d"], False, f"{sec}: bullet {b.get('id')} is not in notes.json")
+                _record(result["d"], False, f"{sec}: bullet {b.get('id')} is not in {'notes.json' if final is None else 'notes_final.json'}")
                 continue
             problems = [name for name in ("text", "section_id", "sources") if b.get(name) != st.get(name)]
             _record(result["d"], not problems, f"{sec}: bullet {b['id']} differs from its statement in {', '.join(problems)}")

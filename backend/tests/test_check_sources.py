@@ -30,10 +30,10 @@ SLIDES = [{
 SLIDES_REPORT = {"slides": [{"section_id": "sec_01", "example_statement_id": "st_0003"}]}
 
 
-def make(tmp_path, notes=NOTES, search=SEARCH, slides=SLIDES, slides_report=SLIDES_REPORT, original=ORIGINAL):
+def make(tmp_path, notes=NOTES, search=SEARCH, slides=SLIDES, slides_report=SLIDES_REPORT, original=ORIGINAL, final=None):
     storage = LocalStorage(tmp_path)
     for name, data in [("notes.json", notes), ("search.json", search), ("transcript.json", original),
-                       ("slides.json", slides), ("slides_report.json", slides_report)]:
+                       ("slides.json", slides), ("slides_report.json", slides_report), ("notes_final.json", final)]:
         if data is not None:
             save_json(job_key("job_c1", name), copy.deepcopy(data), storage)
     return check_sources.check_job("job_c1", storage)
@@ -133,3 +133,27 @@ def test_only_the_first_five_failures_are_printed(tmp_path):
     text = check_sources.format_result(result)
     assert result["a"]["failed"] == 8 and text.count("FAIL a") == 5 and "and 3 more a failures" in text
     assert "8 FAILURE(S)" in text
+
+
+def test_d_and_e_use_notes_final_when_it_exists(tmp_path):
+    """The judge rewrote st_0002 and the slides were built from notes_final.json: d and e must compare with it."""
+    final = copy.deepcopy(NOTES)
+    final[1]["text"] = "Second, rewritten by the fixer."
+    slides = copy.deepcopy(SLIDES)
+    slides[0]["bullets"][1]["text"] = final[1]["text"]
+    assert failed(make(tmp_path, slides=slides, final=final)) == {}
+    # without notes_final.json the same slides differ from notes.json
+    assert failed(make(tmp_path / "no_final", slides=slides)) == {"d": 1}
+
+
+def test_d_bullet_that_differs_from_notes_final_fails(tmp_path):
+    final = copy.deepcopy(NOTES)
+    final[1]["text"] = "Second, rewritten by the fixer."
+    result = make(tmp_path, final=final)  # slides still carry the ORIGINAL text of st_0002
+    assert failed(result) == {"d": 1} and "bullet st_0002 differs from its statement in text" in result["d"]["failures"][0]
+
+
+def test_d_bullet_of_a_dropped_statement_fails(tmp_path):
+    final = [copy.deepcopy(NOTES[0]), copy.deepcopy(NOTES[2])]  # st_0002 was dropped by the judge
+    result = make(tmp_path, final=final)
+    assert failed(result) == {"d": 1} and "bullet st_0002 is not in notes_final.json" in result["d"]["failures"][0]
