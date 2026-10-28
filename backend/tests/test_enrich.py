@@ -151,6 +151,7 @@ def test_missing_key_fails_before_any_call(monkeypatch):
     with pytest.raises(SearchError) as e:
         provider.search("q", 5, "basic")
     assert e.value.kind == "no_key" and http.calls == []
+    assert "TAVILY_API_KEY" in str(e.value) and "OPENAI" not in str(e.value)
 
 
 def test_the_key_never_appears_in_an_error_message():

@@ -66,9 +66,12 @@ def estimate_cost(role: str, prompt_tokens: int, completion_tokens: int) -> floa
 def make_client() -> OpenAI:
     # max_retries=0: the openai library must not retry on its own, call_model owns the retries
     # (otherwise attempts would be hidden from the call log and the count would be wrong).
+    key = (os.getenv(llm_config.API_KEY_ENV) or "").strip()
+    if not key:  # without this the openai library complains about OPENAI_API_KEY, which this project never uses
+        raise LLMError(f"{llm_config.API_KEY_ENV} is not set (add it to .env or to the server's environment variables)", attempts=0)
     return OpenAI(
         base_url=llm_config.BASE_URL,
-        api_key=os.getenv(llm_config.API_KEY_ENV),
+        api_key=key,
         max_retries=0,
     )
 

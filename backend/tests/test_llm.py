@@ -308,3 +308,31 @@ def test_summary_skips_damaged_lines(isolated):
     isolated.log.write_text('{"status": "ok", "est_cost_usd": 0.1}\nnot json\n', encoding="utf-8")
     summary = llm.summarize_log()
     assert summary["total_calls"] == 1 and summary["damaged_lines"] == 1
+
+
+def test_missing_key_error_names_nebius_not_openai(monkeypatch):
+    monkeypatch.delenv("NEBIUS_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    with pytest.raises(llm.LLMError) as e:
+        llm.make_client()
+    assert "NEBIUS_API_KEY" in str(e.value) and "OPENAI" not in str(e.value)
+
+
+def test_blank_key_counts_as_missing(monkeypatch):
+    monkeypatch.setenv("NEBIUS_API_KEY", "   ")
+    with pytest.raises(llm.LLMError):
+        llm.make_client()
+
+
+def test_missing_key_error_names_nebius_not_openai(monkeypatch):
+    monkeypatch.delenv("NEBIUS_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    with pytest.raises(llm.LLMError) as e:
+        llm.make_client()
+    assert "NEBIUS_API_KEY" in str(e.value) and "OPENAI" not in str(e.value)
+
+
+def test_blank_key_counts_as_missing(monkeypatch):
+    monkeypatch.setenv("NEBIUS_API_KEY", "   ")
+    with pytest.raises(llm.LLMError):
+        llm.make_client()

@@ -14,6 +14,7 @@ run_pipeline(job_id) runs every stage in order. After each stage its files are a
 If a stage raises, the job becomes status "error", stage = the stage that failed, error = "<stage>: <short message>".
 The pipeline itself never raises. Extra files per job: upload/<name> (the uploaded file), job.json, pipeline_report.json.
 """
+import os
 import tempfile
 import time
 from pathlib import Path
@@ -29,6 +30,19 @@ TRANSCRIPT_EXTENSIONS = {".txt", ".srt", ".vtt"}
 ALLOWED_EXTENSIONS = AUDIO_EXTENSIONS | TRANSCRIPT_EXTENSIONS
 STAGES = ["transcribing", "cleaning", "enriching", "writing", "judging", "exporting"]
 ERROR_MAX_CHARS = 300
+DEFAULT_MAX_TRANSCRIPT_CHARS = 15000
+
+
+def max_transcript_chars() -> int:
+    """MAX_TRANSCRIPT_CHARS from the environment, read at every call so a .env change or a test takes effect."""
+    try:
+        return int(os.getenv("MAX_TRANSCRIPT_CHARS") or DEFAULT_MAX_TRANSCRIPT_CHARS)
+    except ValueError:
+        return DEFAULT_MAX_TRANSCRIPT_CHARS
+
+
+def too_long_message(chars: int) -> str:
+    return f"The transcript has {chars:,} characters; the limit is {max_transcript_chars():,}. Upload a shorter lecture."
 
 
 def output_urls(job_id: str) -> JobOutputs:
@@ -73,6 +87,9 @@ def _transcribe_stage(job_id, filename, storage, engine):
             segments = transcribe(path, engine=engine)
     if not segments:
         raise ValueError("no speech found in the file")
+    chars = sum(len(s.text) for s in segments)
+    if chars > max_transcript_chars():  # audio: the length is only known now (transcript uploads are checked at POST /jobs)
+        raise ValueError(too_long_message(chars))
     save_transcript(job_id, segments, storage)
 
 

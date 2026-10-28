@@ -11,8 +11,10 @@ Job state lives in the job's storage (jobs/{id}/job.json), so it survives a rest
 """
 import json
 import os
+import threading
 import time
 import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, File, HTTPException, Response, UploadFile
@@ -21,6 +23,7 @@ import export
 import pipeline
 import stats
 import transcribe
+import transcript_import
 from schemas import Job, JobResponse, Section, Statement
 from storage import StorageError, get_storage, job_key, load_json, save_json
 
@@ -28,7 +31,21 @@ router = APIRouter()
 
 SAMPLES = Path(__file__).parent / "samples"
 SAMPLE_JOB_ID = "job_sample"
-MAX_UPLOAD_MB = int(os.getenv("MAX_UPLOAD_MB") or 500)
+
+
+def _int_env(name: str, default: int) -> int:
+    try:
+        return int(os.getenv(name) or default)
+    except ValueError:
+        return default
+
+
+# Abuse limits for POST /jobs (the deployed server is public and every job spends money). A developer can raise
+# them in .env. The two job counters live in this process only: fine for one server process (Render free).
+MAX_UPLOAD_MB = _int_env("MAX_UPLOAD_MB", 10)
+MAX_CONCURRENT_JOBS = _int_env("MAX_CONCURRENT_JOBS", 2)
+MAX_JOBS_PER_DAY = _int_env("MAX_JOBS_PER_DAY", 10)
+READ_CHUNK_BYTES = 1024 * 1024
 # A job that was saved this long ago and is still queued/running lost its server (restart, free-tier sleep): report an error.
 STALE_JOB_SEC = float(os.getenv("STALE_JOB_MINUTES") or 45) * 60
 STALE_MESSAGE = "The server restarted or stopped while this job was running. Please upload the file again."
@@ -38,6 +55,82 @@ DOWNLOADS = {
     "slides.pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
     export.ZIP_NAME: "application/zip",
 }
+
+
+def _utc_today() -> str:
+    return datetime.now(timezone.utc).date().isoformat()
+
+
+class JobLimiter:
+    """Counts jobs that are running now and jobs accepted today (UTC). A slot is reserved BEFORE the upload is
+    read and given back with release() if the job never started (bad file, too big, storage error), so only
+    jobs that were really queued use up the day's count. A job that starts and then fails in the pipeline stays
+    counted (it may already have spent money)."""
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self.running = 0
+        self.day = _utc_today()
+        self.today = 0
+
+    def reserve(self) -> str | None:
+        """None = slot reserved. Otherwise the 429 message."""
+        with self._lock:
+            if self.day != _utc_today():
+                self.day, self.today = _utc_today(), 0
+            if self.today >= MAX_JOBS_PER_DAY:
+                return f"The daily limit of {MAX_JOBS_PER_DAY} lectures for this server has been reached. Try again tomorrow."
+            if self.running >= MAX_CONCURRENT_JOBS:
+                return "Server busy, try again in a few minutes."
+            self.running += 1
+            self.today += 1
+            return None
+
+    def release(self) -> None:
+        """The reserved job never started."""
+        with self._lock:
+            self.running = max(0, self.running - 1)
+            self.today = max(0, self.today - 1)
+
+    def finished(self) -> None:
+        with self._lock:
+            self.running = max(0, self.running - 1)
+
+
+limiter = JobLimiter()
+
+
+def _run_limited(job_id: str, name: str) -> None:
+    try:
+        pipeline.run_pipeline(job_id, name)
+    finally:
+        limiter.finished()
+
+
+def _read_limited(file: UploadFile) -> bytes:
+    """Read the upload in chunks and stop as soon as it is over the limit (never the whole file in memory)."""
+    limit = MAX_UPLOAD_MB * 1024 * 1024
+    parts, size = [], 0
+    while chunk := file.file.read(READ_CHUNK_BYTES):
+        size += len(chunk)
+        if size > limit:
+            raise HTTPException(status_code=413, detail=f"The file is larger than {MAX_UPLOAD_MB} MB.")
+        parts.append(chunk)
+    return b"".join(parts)
+
+
+def _check_transcript_length(name: str, data: bytes) -> None:
+    """Transcript uploads: count the characters after parsing. Unreadable files are left to the pipeline, which
+    reports them on the job. (Audio is counted after transcription, in pipeline._transcribe_stage.)"""
+    parse = transcript_import.PARSERS.get(Path(name).suffix.lower())
+    if parse is None:
+        return
+    try:
+        chars = sum(len(seg.text) for seg in parse(transcript_import._decode(data)))
+    except Exception:
+        return
+    if chars > pipeline.max_transcript_chars():
+        raise HTTPException(status_code=413, detail=pipeline.too_long_message(chars))
 
 
 def _optional(job_id: str, name: str, storage, default):
@@ -84,16 +177,21 @@ def create_job(background: BackgroundTasks, file: UploadFile = File(...)):
         ok, reason = transcribe.audio_available()
         if not ok:
             raise HTTPException(status_code=400, detail=reason)
-    limit = MAX_UPLOAD_MB * 1024 * 1024
-    data = file.file.read(limit + 1)
-    if len(data) > limit:
-        raise HTTPException(status_code=413, detail=f"The file is larger than {MAX_UPLOAD_MB} MB.")
-    if not data:
-        raise HTTPException(status_code=400, detail="The file is empty.")
-    storage = get_storage()
-    job_id = f"job_{uuid.uuid4().hex[:12]}"
-    job = pipeline.create_job(job_id, name, data, storage)
-    background.add_task(pipeline.run_pipeline, job_id, name, storage)
+    busy = limiter.reserve()
+    if busy:
+        raise HTTPException(status_code=429, detail=busy)
+    try:
+        data = _read_limited(file)
+        if not data:
+            raise HTTPException(status_code=400, detail="The file is empty.")
+        _check_transcript_length(name, data)
+        storage = get_storage()
+        job_id = f"job_{uuid.uuid4().hex[:12]}"
+        job = pipeline.create_job(job_id, name, data, storage)
+    except BaseException:
+        limiter.release()
+        raise
+    background.add_task(_run_limited, job_id, name)
     return JobResponse(**job.model_dump())
 
 
