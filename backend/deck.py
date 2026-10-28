@@ -23,7 +23,9 @@ from schemas import Section, Slide, Statement
 from slides import source_text
 
 NAVY, TEAL, AMBER = "0F2A4A", "0E9F8E", "F59E0B"
-BG, INK, MUTED = "F7F8FA", "1F2933", "64748B"
+BG, INK, MUTED = "F7F8FA", "1F2933", "5B6B7F"  # MUTED was 64748B (4.48:1 on BG); this is 5.3:1
+TEAL_TEXT = "0A6F64"  # teal for SMALL TEXT (tags, links, chip, headings): 5.7:1 on BG, 5.3:1 on the chip. TEAL stays for bars, bullets and rules
+AMBER_TEXT = "B45309"  # amber for the EXAMPLE label: 5.0:1 on white. AMBER stays for the box border
 CHIP_FILL, BOX_FILL, BOX_LINE = "E3F4F1", "FFFFFF", "D5DCE5"
 ON_NAVY, ON_NAVY_MUTED = "FFFFFF", "AEBBCB"
 SERIF, SANS = "Georgia", "Calibri"
@@ -34,6 +36,7 @@ BODY_TOP, BODY_BOTTOM = 1.7, 6.85
 CHAR_W = {SERIF: 0.60, SANS: 0.45}  # average character width in em; PowerPoint renders Calibri text at about 0.42, Georgia bold at about 0.58
 LINE = 1.2  # line height in em
 MIN_SIZE = 14
+EXAMPLE_GAP = 0.3  # inches between the last bullet and the example box
 GAP_JOIN = 2.0  # lecture ranges that are closer than this many seconds are shown as one range (display only)
 HYPHEN = "\u2011"  # a non-breaking hyphen keeps "01:01-01:10" on one line
 SOURCE_SIZE = 12
@@ -229,11 +232,11 @@ def _title_slide(prs, title, stats_line, number):
 
 
 def _tag_color(tag: str) -> str:
-    return TEAL if tag in ("verified", "rewritten") else MUTED
+    return TEAL_TEXT if tag in ("source-checked", "rewritten") else MUTED
 
 
-def _fit(bullets: list[Statement], example: str | None, tags: dict, area_h: float, size: int, width: float) -> int:
-    """How many of the bullets (from the first) fit in area_h inches at this size."""
+def _fit(bullets: list[Statement], example: str | None, tags: dict, area_h: float, size: int, width: float) -> tuple[int, float]:
+    """(how many of the bullets, from the first, fit in area_h inches at this size, the height in inches they use)."""
     used, count = 0.1, 0  # text frame margins
     for i, b in enumerate(bullets):
         h = height_in(lines_needed(b.text, size, width - 0.3), size)
@@ -242,7 +245,7 @@ def _fit(bullets: list[Statement], example: str | None, tags: dict, area_h: floa
         if used + h > area_h:
             break
         used, count = used + h, count + 1
-    return count
+    return count, used
 
 
 def _content_slide(prs, slide: Slide, time_range: str | None, tags: dict, number: int, warnings: list[str]):
@@ -257,7 +260,7 @@ def _content_slide(prs, slide: Slide, time_range: str | None, tags: dict, number
         tf = _frame(chip, margin=0.05, anchor=MSO_ANCHOR.MIDDLE)
         p = tf.paragraphs[0]
         p.alignment = PP_ALIGN.CENTER
-        _run(p, f"Lecture {time_range}", 13, TEAL, bold=True)
+        _run(p, f"Lecture {time_range}", 13, TEAL_TEXT, bold=True)
 
     width = RIGHT - LEFT
     bullets = list(slide.bullets)
@@ -291,14 +294,14 @@ def _content_slide(prs, slide: Slide, time_range: str | None, tags: dict, number
         area_bottom = BODY_BOTTOM
     area_h = area_bottom - body_top
 
-    count = _fit(bullets, example, tags, area_h, size, width)
+    count, used = _fit(bullets, example, tags, area_h, size, width)
     if count == 0 and bullets:  # one statement alone is too long even for an empty slide: show its beginning
         first = bullets[0]
         keep = len(first.text)
         while count == 0 and keep > 20:
             keep = int(keep * 0.85)
             probe = first.model_copy(update={"text": short(first.text, keep)})
-            count = _fit([probe], example, tags, area_h, size, width)
+            count, used = _fit([probe], example, tags, area_h, size, width)
         bullets[0] = probe
         notes_extra.append(f"{first.text} [Source: {source_text(first)}]")
         warnings.append(f'slide "{slide.title}": statement {first.id} was shortened on the slide; the full text is in the speaker notes')
@@ -310,7 +313,7 @@ def _content_slide(prs, slide: Slide, time_range: str | None, tags: dict, number
         warnings.append(f'slide "{slide.title}": {len(moved)} bullet(s) did not fit and were moved to the speaker notes: '
                         + ", ".join(m.id for m in moved))
 
-    box, tf = _textbox(s, LEFT, body_top, width, area_h)
+    box, tf = _textbox(s, LEFT, body_top, width, max(used, 0.5))  # as high as the bullets are, so the example box below does not overlap it
     first_par = True
     for b in bullets:
         p = tf.paragraphs[0] if first_par else tf.add_paragraph()
@@ -330,23 +333,23 @@ def _content_slide(prs, slide: Slide, time_range: str | None, tags: dict, number
         for label, url in web_sources(b):
             if parts_written:
                 _run(q, " | ", SOURCE_SIZE, MUTED)
-            _run(q, label, SOURCE_SIZE, TEAL, link=url)
+            _run(q, label, SOURCE_SIZE, TEAL_TEXT, link=url)
             parts_written = True
         tag = tags.get(b.id)
         if tag:
             _run(q, ("   " if parts_written else "") + tag, SOURCE_SIZE, _tag_color(tag), bold=True)
 
     if example:
-        y = BODY_BOTTOM - box_h
+        y = min(body_top + used + EXAMPLE_GAP, BODY_BOTTOM - box_h)  # right below the last bullet; the empty space stays at the bottom of the slide
         card = _rect(s, LEFT, y, width, box_h, BOX_FILL, MSO_SHAPE.ROUNDED_RECTANGLE)
         card.adjustments[0] = 0.12
         card.line.fill.solid()
-        card.line.fill.fore_color.rgb = rgb(BOX_LINE)
-        card.line.width = Pt(1)
+        card.line.fill.fore_color.rgb = rgb(AMBER)
+        card.line.width = Pt(1.25)
         tf = _frame(card, margin=0.2, anchor=MSO_ANCHOR.MIDDLE)
         p = tf.paragraphs[0]
         p.alignment = PP_ALIGN.LEFT
-        _run(p, "EXAMPLE", 12, AMBER, bold=True)
+        _run(p, "EXAMPLE", 12, AMBER_TEXT, bold=True)
         p2 = tf.add_paragraph()
         p2.alignment = PP_ALIGN.LEFT
         p2.space_before = Pt(2)
@@ -415,7 +418,7 @@ def _sources_slides(prs, slides: list[Slide], statements: list[Statement], numbe
             x = LEFT + col * (col_w + 0.5)
             box, tf = _textbox(s, x, BODY_TOP, col_w, BODY_BOTTOM - BODY_TOP)
             p = tf.paragraphs[0]
-            _run(p, heading, 20, TEAL, SERIF, bold=True)
+            _run(p, heading, 20, TEAL_TEXT, SERIF, bold=True)
             if col == 0:
                 for idx in (left_pages[page] if page < len(left_pages) else []):
                     title, ranges = left[idx]
@@ -434,21 +437,21 @@ def _sources_slides(prs, slides: list[Slide], statements: list[Statement], numbe
                     label, url = right[idx]
                     q = tf.add_paragraph()
                     q.space_before = Pt(8)
-                    _run(q, label, size, TEAL, link=url)
+                    _run(q, label, size, TEAL_TEXT, link=url)
         _slide_number(s, number + page, MUTED)
     return number + total
 
 
 # ------------------------------------------------------------------------------------------------ public
 def _theme_link_colors(prs) -> None:
-    """Hyperlinks take their colour from the theme (a run colour is ignored): set it to the teal of the palette."""
+    """Hyperlinks take their colour from the theme (a run colour is ignored): set it to the dark teal used for small text."""
     import re as _re
 
     from pptx.opc.constants import RELATIONSHIP_TYPE as RT
 
     theme = prs.slide_master.part.part_related_by(RT.THEME)
     xml = theme.blob.decode("utf-8")
-    xml = _re.sub(r'(<a:hlink>\s*<a:srgbClr val=")[0-9A-Fa-f]{6}', r"\g<1>" + TEAL, xml)
+    xml = _re.sub(r'(<a:hlink>\s*<a:srgbClr val=")[0-9A-Fa-f]{6}', r"\g<1>" + TEAL_TEXT, xml)
     xml = _re.sub(r'(<a:folHlink>\s*<a:srgbClr val=")[0-9A-Fa-f]{6}', r"\g<1>" + "0B7A6E", xml)
     theme._blob = xml.encode("utf-8")
 
@@ -458,7 +461,7 @@ def build_deck(
     sections: list[Section] | None = None, status: dict[str, str] | None = None, judged: bool | None = None,
     warnings: list[str] | None = None,
 ) -> bytes:
-    """status: {statement_id: "verified" | "rewritten" | "not judged"} from the judge files, or None when there is no data.
+    """status: {statement_id: "source-checked" | "rewritten" | "not judged"} from the judge files, or None when there is no data.
     judged False = the job has no notes_final.json: the title slide says "not judged" and every statement is tagged so."""
     import io
 
@@ -478,7 +481,7 @@ def build_deck(
     if judged is False:
         stats.append("not judged")
     elif status:
-        stats.append(f"{sum(status.get(st.id) in ('verified', 'rewritten') for st in statements)} verified by the judge")
+        stats.append(f"{sum(status.get(st.id) in ('source-checked', 'rewritten') for st in statements)} source-checked by the judge")
     _title_slide(prs, title, " - ".join(stats), 1)
 
     number = 2

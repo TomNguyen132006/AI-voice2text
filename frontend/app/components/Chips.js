@@ -70,7 +70,7 @@ export function WebChip({ source }) {
 }
 
 const BADGES = {
-  verified: ['Verified', 'Checked by the judge against its sources.'],
+  verified: ['Source-checked', 'Checked by the judge against its sources.'],
   rewritten: ['Rewritten', 'It failed the first check, was rewritten from its own sources, and passed the second check.'],
   unjudged: ['Not judged', 'The judge gave no verdict for this note.'],
 }

@@ -133,7 +133,7 @@ def _load_statements(job_id: str, storage=None) -> tuple[list[Statement], bool]:
 
 
 def _judge_status(job_id: str, statements: list[Statement], storage=None) -> dict[str, str] | None:
-    """{statement_id: "verified" | "rewritten" | "not judged"} from judge.json and fix_log.json, or None when judge.json does not exist.
+    """{statement_id: "source-checked" | "rewritten" | "not judged"} from judge.json and fix_log.json, or None when judge.json does not exist.
     "rewritten" = the judge rejected the first text, Super rewrote it, and the second check passed."""
     try:
         verdicts = {v["statement_id"]: v["verdict"] for v in load_json(job_key(job_id, "judge.json"), storage)}
@@ -143,7 +143,7 @@ def _judge_status(job_id: str, statements: list[Statement], storage=None) -> dic
         fixed = {e["statement_id"] for e in load_json(job_key(job_id, "fix_log.json"), storage) if e.get("outcome") == "fixed"}
     except FileNotFoundError:
         fixed = set()
-    return {st.id: "rewritten" if st.id in fixed else "verified" if verdicts.get(st.id) == "pass" else "not judged" for st in statements}
+    return {st.id: "rewritten" if st.id in fixed else "source-checked" if verdicts.get(st.id) == "pass" else "not judged" for st in statements}
 
 
 def _load_clean(job_id: str, storage=None) -> list[Segment]:

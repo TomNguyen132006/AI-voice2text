@@ -49,7 +49,7 @@ function Summary({ job, sectionCount }) {
       <dl className="grid grid-cols-2 gap-x-4 gap-y-4 sm:grid-cols-3 lg:grid-cols-6">
         <Figure value={sectionCount} label="sections" />
         <Figure value={statements.length} label="notes" />
-        {verified !== null && <Figure value={verified} label="verified by the judge" />}
+        {verified !== null && <Figure value={verified} label="source-checked by the judge" />}
         {typeof summary.fixed === 'number' && <Figure value={summary.fixed} label="rewritten" />}
         {typeof summary.total_seconds === 'number' && <Figure value={duration(summary.total_seconds)} label="processing time" />}
         {typeof summary.est_cost_usd === 'number' && <Figure value={`$${summary.est_cost_usd.toFixed(3)}`} label="model cost" />}

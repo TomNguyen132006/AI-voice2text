@@ -194,11 +194,11 @@ def test_speaker_notes_keep_the_slide_notes_with_sources_untouched_when_everythi
 # -------------------------------------------------------------------------------------------- title slide
 def test_title_slide_numbers():
     statements = [st(1), st(2), st(3)]
-    status = {"st_0001": "verified", "st_0002": "rewritten", "st_0003": "not judged"}
+    status = {"st_0001": "source-checked", "st_0002": "rewritten", "st_0003": "not judged"}
     prs, _ = build([make(statements)], title="CSC 335 databases", statements=statements, sections=SECTIONS, status=status, judged=True)
     text = slide_text(prs.slides[0])
     assert "CSC 335 databases" in text
-    assert "1 section - 3 statements - 2 verified by the judge" in text
+    assert "1 section - 3 statements - 2 source-checked by the judge" in text
     assert "Built with Nemotron on Nebius Token Factory. Every statement cites a lecture time or a web link." in text
     assert prs.slides[0].shapes.title.text == "CSC 335 databases"
 
@@ -210,8 +210,8 @@ def test_title_slide_says_not_judged_for_a_job_without_judge_and_has_no_made_up_
     assert slide_text(prs.slides[1]).count("not judged") == 2  # every statement is tagged
     prs, _ = build([make(statements)], statements=statements, judged=True, status=None)  # judged, but no per-statement data
     text = slide_text(prs.slides[0])
-    assert "1 section - 2 statements" in text and "verified" not in text and "not judged" not in text
-    assert "verified" not in slide_text(prs.slides[1])
+    assert "1 section - 2 statements" in text and "source-checked" not in text and "not judged" not in text
+    assert "source-checked" not in slide_text(prs.slides[1])
 
 
 # ------------------------------------------------------------------------------------------ sources slide
@@ -269,8 +269,8 @@ def test_export_job_status_tags_come_from_the_judge_files(tmp_path):
     export.export_job("job_d1", storage, warnings=warnings)
     prs = Presentation(io.BytesIO(storage.load_bytes(job_key("job_d1", "slides.pptx"))))
     text = slide_text(prs.slides[1])
-    assert text.count("verified") == 1 and text.count("rewritten") == 1 and text.count("not judged") == 2  # st_0003 and st_0004 (no verdict)
-    assert "1 section - 4 statements - 2 verified by the judge" in slide_text(prs.slides[0])
+    assert text.count("source-checked") == 1 and text.count("rewritten") == 1 and text.count("not judged") == 2  # st_0003 and st_0004 (no verdict)
+    assert "1 section - 4 statements - 2 source-checked by the judge" in slide_text(prs.slides[0])
 
 
 def test_export_job_without_judge_files_has_no_tags_and_without_notes_final_says_not_judged(tmp_path):
@@ -281,5 +281,60 @@ def test_export_job_without_judge_files_has_no_tags_and_without_notes_final_says
         save_json(job_key("job_d2", name), data, storage)
     export.export_job("job_d2", storage)
     prs = Presentation(io.BytesIO(storage.load_bytes(job_key("job_d2", "slides.pptx"))))
-    assert "verified" not in slide_text(prs.slides[1]) and "not judged" not in slide_text(prs.slides[0])
+    assert "source-checked" not in slide_text(prs.slides[1]) and "not judged" not in slide_text(prs.slides[0])
     assert export._judge_status("job_d2", statements, storage) is None
+
+
+# ---------------------------------------------------------------------------------- polish: contrast, layout
+def _lum(hex_color):
+    channels = [int(hex_color[i:i + 2], 16) / 255 for i in (0, 2, 4)]
+    channels = [c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4 for c in channels]
+    return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2]
+
+
+def contrast(a, b):
+    hi, lo = sorted((_lum(a), _lum(b)), reverse=True)
+    return (hi + 0.05) / (lo + 0.05)
+
+
+@pytest.mark.parametrize("name, fg, bg", [
+    ("body text", deck.INK, deck.BG), ("body text on white", deck.INK, "FFFFFF"), ("title", deck.NAVY, deck.BG),
+    ("source line and slide number", deck.MUTED, deck.BG), ("muted on white", deck.MUTED, "FFFFFF"),
+    ("tags, links, headings (dark teal)", deck.TEAL_TEXT, deck.BG), ("chip text", deck.TEAL_TEXT, deck.CHIP_FILL),
+    ("EXAMPLE label", deck.AMBER_TEXT, deck.BOX_FILL), ("title slide text", deck.ON_NAVY, deck.NAVY),
+    ("title slide footer and number", deck.ON_NAVY_MUTED, deck.NAVY),
+])
+def test_small_text_has_at_least_4_5_to_1_contrast(name, fg, bg):
+    assert contrast(fg, bg) >= 4.5, (name, round(contrast(fg, bg), 2))
+
+
+def test_the_label_uses_the_dark_amber_and_the_light_amber_is_only_the_border():
+    prs, _ = build([make([st(1)], example="An example.")])
+    label_runs = [r for sh in prs.slides[1].shapes if sh.has_text_frame for p in sh.text_frame.paragraphs for r in p.runs if r.text == "EXAMPLE"]
+    assert len(label_runs) == 1 and str(label_runs[0].font.color.rgb) == deck.AMBER_TEXT
+    cards = [sh for sh in prs.slides[1].shapes if sh.has_text_frame and "EXAMPLE" in sh.text_frame.text]
+    assert str(cards[0].line.color.rgb) == deck.AMBER
+
+
+def _example_card_and_bullets(slide):
+    card = next(sh for sh in slide.shapes if sh.has_text_frame and "EXAMPLE" in sh.text_frame.text)
+    box = next(sh for sh in slide.shapes if sh.has_text_frame and sh is not card and sh.text_frame.text.startswith("Statement"))
+    return card, box
+
+
+def test_example_box_sits_right_below_the_bullets_and_short_content_leaves_the_space_at_the_bottom():
+    prs, _ = build([make([st(1)], example="An example.")])
+    card, box = _example_card_and_bullets(prs.slides[1])
+    gap = (card.top - (box.top + box.height)) / 914400
+    assert abs(gap - deck.EXAMPLE_GAP) < 0.01  # a fixed gap below the last bullet
+    assert card.top < Inches(3.5)  # not pinned to the bottom: the empty band is under the box
+    assert card.top + card.height < Inches(5.0)
+
+
+def test_example_box_never_overlaps_the_bullets_and_stays_inside_the_slide_when_the_slide_is_full():
+    bullets = [st(n, f"Statement {n} " + "word " * 12) for n in range(1, 8)]
+    prs, _ = build([make(bullets, example="An example with some words in it.")])
+    card, box = _example_card_and_bullets(prs.slides[1])
+    assert card.top >= box.top + box.height
+    assert card.top + card.height <= Inches(deck.BODY_BOTTOM) + 1  # inside the body area
+    assert card.top + card.height <= prs.slide_height
