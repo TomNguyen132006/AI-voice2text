@@ -1,110 +1,172 @@
 'use client'
 
-const STAGE_LABELS = {
+import { STAGES, duration } from '../lib/api'
+
+const STEP_LABELS = {
   cleaning: 'Clean transcript',
   topic_split: 'Split by topic',
   gap_finder: 'Find gaps',
   notes_writer: 'Write notes',
   judge: 'Judge',
-  fixer: 'Rewrite rejected',
+  fixer: 'Rewrite rejected notes',
   slide_writer: 'Write slides',
 }
 
 const VERDICT_LABELS = {
-  unsupported: 'claim not in the cited source',
+  unsupported: 'a claim is not in the cited source',
   contradicts: 'contradicts the lecture',
   no_source: 'no source',
-  bad_source: 'source does not exist',
-  unknown_url: 'link not from our search',
-  unjudged: 'judge gave no verdict',
+  bad_source: 'the source does not exist',
+  unknown_url: 'the link is not from our search',
+  unjudged: 'the judge gave no verdict',
 }
 
 const money = (n) => `$${n.toFixed(4)}`
 const seconds = (ms) => `${(ms / 1000).toFixed(1)} s`
+const number = (n) => n.toLocaleString('en-US')
 
-export default function StatsPanel({ stats }) {
+// "nvidia/Nemotron-3-Ultra-550b-a55b" -> "Nemotron Ultra"
+function modelName(id = '') {
+  const lower = id.toLowerCase()
+  for (const size of ['nano', 'super', 'ultra']) {
+    if (lower.includes(size)) return `Nemotron ${size[0].toUpperCase()}${size.slice(1)}`
+  }
+  return id.split('/').pop() || 'Unknown model'
+}
+
+const clip = (text, max = 90) => (text.length > max ? `${text.slice(0, max - 1)}…` : text)
+
+// stats: undefined while loading, null or {available: false} when this job has none.
+export default function StatsPanel({ stats, statements = [] }) {
+  if (stats === undefined) {
+    return (
+      <p role="status" className="min-h-14 rounded-lg border border-line bg-surface px-4 py-4 text-muted">
+        Loading how this was made…
+      </p>
+    )
+  }
   if (!stats || !stats.available) return null
   const { calls, judge } = stats
   const total = calls.total
-  const stages = Object.entries(calls.by_stage)
-  const rejected = Object.entries(judge.rejected_by_verdict || {})
+  const steps = Object.entries(calls.by_stage)
+  const rejected = Object.entries(judge?.rejected_by_verdict || {})
+  const textOf = Object.fromEntries(statements.map((s) => [s.id, s.text]))
+  const perStage = STAGES.filter(([key]) => stats.seconds_per_stage?.[key] !== undefined)
+
   return (
-    <details className="rounded-lg border border-zinc-300 p-3 text-sm dark:border-zinc-700">
-      <summary className="cursor-pointer font-medium">
-        How this was made: {total.calls} model calls, {Math.round(stats.total_seconds)} s, about {money(total.est_cost_usd)}
-        {total.cost_is_lower_bound ? ' (at least)' : ''}
-      </summary>
-      <div className="mt-3 flex flex-col gap-4">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left">
-            <thead className="text-zinc-500">
-              <tr>
-                <th className="py-1 pr-3 font-normal">Step</th>
-                <th className="py-1 pr-3 font-normal">Model</th>
-                <th className="py-1 pr-3 text-right font-normal">Calls</th>
-                <th className="py-1 pr-3 text-right font-normal">Tokens in / out</th>
-                <th className="py-1 pr-3 text-right font-normal">Model time</th>
-                <th className="py-1 text-right font-normal">Cost</th>
-              </tr>
-            </thead>
-            <tbody>
-              {stages.map(([stage, row]) => (
-                <tr key={stage} className="border-t border-zinc-200 dark:border-zinc-800">
-                  <td className="py-1 pr-3">{STAGE_LABELS[stage] || stage}</td>
-                  <td className="py-1 pr-3 font-mono text-xs">{(row.model_id || '').split('/').pop()}</td>
-                  <td className="py-1 pr-3 text-right">
-                    {row.calls}
-                    {row.failed_calls ? ` (${row.failed_calls} failed)` : ''}
-                  </td>
-                  <td className="py-1 pr-3 text-right">
-                    {row.prompt_tokens.toLocaleString()} / {row.completion_tokens.toLocaleString()}
-                  </td>
-                  <td className="py-1 pr-3 text-right">{seconds(row.latency_ms)}</td>
-                  <td className="py-1 text-right">{money(row.est_cost_usd)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {judge.statements !== undefined && (
+    <section aria-labelledby="stats-heading" className="md:relative md:left-1/2 md:w-[min(960px,calc(100vw-3rem))] md:-translate-x-1/2">
+      <details className="rounded-lg border border-line bg-surface">
+        <summary id="stats-heading" className="cursor-pointer px-4 py-3 font-medium">
+          How this was made: {total.calls} model calls, {duration(stats.total_seconds)}, about {money(total.est_cost_usd)}
+          {total.cost_is_lower_bound ? ' (at least)' : ''}
+        </summary>
+        <div className="flex flex-col gap-6 border-t border-line px-4 py-4">
           <div>
-            <p className="font-medium">Judge</p>
-            <p>
-              {judge.passed_first_time} of {judge.statements} statements passed the first time
-              {rejected.length > 0 && '. Rejected: '}
-              {rejected.map(([verdict, n], i) => (
-                <span key={verdict}>
-                  {i > 0 && ', '}
-                  {n} × {VERDICT_LABELS[verdict] || verdict}
-                </span>
-              ))}
-              {judge.fix_attempted ? `. ${judge.fixed} of ${judge.fix_attempted} rewritten statements passed the second check.` : '.'}
+            <h3 className="mb-2 font-semibold">Models and cost by step</h3>
+            <div role="region" aria-label="Model usage by step" tabIndex={0} className="overflow-x-auto">
+              <table className="w-full min-w-[34rem] text-left">
+                <thead className="text-muted">
+                  <tr>
+                    <th scope="col" className="py-1 pr-3 font-medium">Step</th>
+                    <th scope="col" className="py-1 pr-3 font-medium">Model</th>
+                    <th scope="col" className="py-1 pr-3 text-right font-medium">Calls</th>
+                    <th scope="col" className="py-1 pr-3 text-right font-medium">Tokens in / out</th>
+                    <th scope="col" className="py-1 pr-3 text-right font-medium">Model time</th>
+                    <th scope="col" className="py-1 text-right font-medium">Cost</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {steps.map(([step, row]) => (
+                    <tr key={step} className="border-t border-line">
+                      <th scope="row" className="py-1.5 pr-3 font-normal">{STEP_LABELS[step] || step}</th>
+                      <td className="py-1.5 pr-3">{modelName(row.model_id)}</td>
+                      <td className="py-1.5 pr-3 text-right tabular-nums">
+                        {row.calls}
+                        {row.failed_calls ? ` (${row.failed_calls} failed)` : ''}
+                      </td>
+                      <td className="py-1.5 pr-3 text-right tabular-nums">
+                        {number(row.prompt_tokens)} / {number(row.completion_tokens)}
+                      </td>
+                      <td className="py-1.5 pr-3 text-right tabular-nums">{seconds(row.latency_ms)}</td>
+                      <td className="py-1.5 text-right tabular-nums">{money(row.est_cost_usd)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t-2 border-line font-medium">
+                    <th scope="row" className="py-1.5 pr-3 text-left">Total</th>
+                    <td className="py-1.5 pr-3" />
+                    <td className="py-1.5 pr-3 text-right tabular-nums">{total.calls}</td>
+                    <td className="py-1.5 pr-3 text-right tabular-nums">
+                      {number(total.prompt_tokens)} / {number(total.completion_tokens)}
+                    </td>
+                    <td className="py-1.5 pr-3 text-right tabular-nums">{seconds(total.latency_ms)}</td>
+                    <td className="py-1.5 text-right tabular-nums">{money(total.est_cost_usd)}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+            <p className="mt-2 text-muted">
+              Speech to text (NVIDIA Parakeet) runs only when an audio file is uploaded to a server with a GPU. It is not in these numbers.
             </p>
-            {judge.rejections.length > 0 && (
-              <ul className="mt-2 list-disc pl-5 text-zinc-600 dark:text-zinc-400">
-                {judge.rejections.map((r) => (
-                  <li key={r.statement_id}>
-                    {r.statement_id}: {VERDICT_LABELS[r.verdict] || r.verdict}
-                    {r.reason ? ` — ${r.reason}` : ''}
+          </div>
+
+          {perStage.length > 0 && (
+            <div>
+              <h3 className="mb-2 font-semibold">Time by stage</h3>
+              <ul className="flex flex-wrap gap-x-5 gap-y-1 text-muted">
+                {perStage.map(([key, title]) => (
+                  <li key={key}>
+                    {title}: <span className="tabular-nums text-ink">{duration(stats.seconds_per_stage[key])}</span>
                   </li>
                 ))}
-                {judge.more_rejections > 0 && <li>…and {judge.more_rejections} more</li>}
               </ul>
-            )}
-          </div>
-        )}
-        {stats.search && stats.search.provider && (
-          <p className="text-zinc-600 dark:text-zinc-400">
-            Web search ({stats.search.provider}): {stats.search.provider_calls} requests, {stats.search.cache_hits} from cache
-            {stats.search.errors?.length ? `, ${stats.search.errors.length} failed` : ''}.
-          </p>
-        )}
-        {stats.warnings.map((w) => (
-          <p key={w} className="text-amber-700 dark:text-amber-300">
-            Note: {w}
-          </p>
-        ))}
-      </div>
-    </details>
+            </div>
+          )}
+
+          {judge && judge.statements !== undefined && (
+            <div>
+              <h3 className="mb-2 font-semibold">Judge</h3>
+              <p>
+                {judge.passed_first_time} of {judge.statements} notes passed the first check
+                {rejected.length > 0 && '. Rejected: '}
+                {rejected.map(([verdict, n], i) => (
+                  <span key={verdict}>
+                    {i > 0 && ', '}
+                    {n} × {VERDICT_LABELS[verdict] || verdict}
+                  </span>
+                ))}
+                {judge.fix_attempted ? `. ${judge.fixed} of ${judge.fix_attempted} rewritten notes passed the second check.` : '.'}
+              </p>
+              {judge.rejections.length > 0 && (
+                <ul className="mt-2 flex flex-col gap-2 text-muted">
+                  {judge.rejections.map((r) => (
+                    <li key={r.statement_id}>
+                      <span className="text-ink">“{clip(textOf[r.statement_id] || r.statement_id)}”</span>
+                      <br />
+                      {VERDICT_LABELS[r.verdict] || r.verdict}
+                      {r.reason ? `: ${r.reason}` : ''}
+                    </li>
+                  ))}
+                  {judge.more_rejections > 0 && <li>…and {judge.more_rejections} more</li>}
+                </ul>
+              )}
+            </div>
+          )}
+
+          {stats.search && stats.search.provider && (
+            <p className="text-muted">
+              Web search ({stats.search.provider}): {stats.search.provider_calls} requests, {stats.search.cache_hits} from cache
+              {stats.search.errors?.length ? `, ${stats.search.errors.length} failed` : ''}.
+            </p>
+          )}
+          {(stats.warnings || []).map((warning) => (
+            <p key={warning} className="text-muted">
+              Note: {warning}
+            </p>
+          ))}
+        </div>
+      </details>
+    </section>
   )
 }

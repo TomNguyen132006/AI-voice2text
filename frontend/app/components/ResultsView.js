@@ -162,7 +162,7 @@ export default function ResultsView({ job, onReset }) {
         </section>
       ))}
 
-      <StatsPanel stats={stats} />
+      <StatsPanel stats={stats} statements={job.statements} />
     </div>
   )
 }
