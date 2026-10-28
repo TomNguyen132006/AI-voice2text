@@ -317,3 +317,18 @@ def test_guard_uses_the_term_of_the_web_id_and_multi_word_terms_in_order():
     ), section=sec)
     assert [len(d.sources) for d in r.drafts] == [2, 1]
     assert [d["reason"] for d in r.info["dropped_sources"]] == ["web_source_term_mismatch"]
+
+
+def test_meta_start_statements_are_counted_not_dropped():
+    r, _ = one(lambda k, n: reply(
+        note("The lecturer says that a table is a relation.", "seg_0000"),
+        note("the Instructor explains rows.", "seg_0000"),
+        note("A table is also called a relation.", "seg_0000"),
+        note("Lecturers often repeat key ideas.", "seg_0000"),  # starts with a different word: not counted
+    ))
+    assert r.info["statements"] == 4 and r.info["n_meta_start"] == 2  # nothing is dropped by code
+    assert notes.build_result("job_n1", [r], ORIGINAL).report["n_meta_start"] == 2
+
+
+def test_prompt_forbids_attribution_starts_without_numbers():
+    assert "Do not start a note with an attribution" in notes.SYSTEM_PROMPT

@@ -1,20 +1,20 @@
 """Slide writer (S4-2): one slide per section, built FROM the validated statements of that section.
 
 Super sees the section title and that section's statements as [{id, text}] (no sources, no urls) and
-chooses: a short slide title, the ids of the statements to show as bullets (in order), and optionally
-ONE id as the example. The model never writes a claim. Code builds the schemas.Slide:
-- bullets      = copies of the chosen Statement objects (text and sources unchanged), WITHOUT the example
-- example      = the text of the chosen example statement. The example id must be one of the chosen ids; that
-                 statement is removed from the bullets so nothing is printed twice. Slide.example is a plain
-                 string without sources, so code writes the sources of the example into the speaker notes
-                 ("Source of the example: ..."); the statement itself, with its sources, stays in notes.json.
-                 (If the example is the only chosen statement it stays a bullet and there is no example.)
+chooses only: a short slide title and optionally ONE statement id as the example. The model never writes a
+claim and does not pick the bullets. Code builds the schemas.Slide:
+- bullets      = copies of ALL statements of the section except the example (text and sources unchanged), in
+                 lecture order (by the first lecture time of each statement; web-only statements last, in notes order)
+- example      = the text of the chosen example statement. That statement is not a bullet, so nothing is printed
+                 twice. Slide.example is a plain string without sources, so code writes the sources of the example
+                 into the speaker notes ("Source of the example: ..."); the statement itself, with its sources,
+                 stays in notes.json. (A section with only one statement keeps it as a bullet, with no example.)
 - speaker_notes = built by code only: the statements that are not shown (their texts), the source line of the
                  example, and the lecture time range of the section for re-listening. The model writes no free text.
 - title        = the model's short label (a name for the topic, not a claim); a title that is empty or
                  too long is replaced by the section title.
-Limits (slides_config.py) are enforced by code: an unknown id or an id of another section is dropped;
-more than SLIDE_MAX_BULLETS bullets are cut; a statement of more than SLIDE_MAX_WORDS_PER_BULLET words is
+Limits (slides_config.py) are enforced by code: an unknown example id (not in this section) is dropped;
+more than SLIDE_MAX_BULLETS bullets are cut (the later ones in lecture order); a statement of more than SLIDE_MAX_WORDS_PER_BULLET words is
 not shown as a bullet (it is not shortened, because that would be rewriting it). Cut and long statements
 move to the speaker notes, so nothing is lost. A slide without bullets is flagged and left out; a section
 whose call fails is flagged and the others go on.
@@ -44,12 +44,11 @@ STAGE = "slide_writer"
 
 SYSTEM_PROMPT = """You turn the notes of ONE lecture section into ONE slide for a beginner. The user message is JSON:
 "section_id", "title" and "statements" as [{"id", "text"}] (the notes of this section, already checked).
-You do not write any content yourself. You choose from the statements:
+You do not write any content yourself, and you do not choose the bullets: every statement except the example is shown as a bullet automatically. You choose two things:
 - "title": a short name for the topic of the slide (a label, not a sentence that claims something).
-- "bullets": the ids of the statements to show on the slide, the most important ones, in a sensible teaching order. Use only ids from the user message, each at most once.
-- "example": the id of ONE statement from "bullets" that works as the example of the slide, or null if none does. It is shown in the example box instead of as a bullet.
+- "example": the id of ONE statement that works best as the worked example of the slide (a concrete case, number or instance), or null if none does. It is shown in a separate example box instead of as a bullet. Use only an id from the user message.
 Reply with ONLY a JSON object:
-{"title": "<short topic name>", "bullets": ["st_0001", "st_0002"], "example": "st_0002"}
+{"title": "<short topic name>", "example": "st_0002"}
 No other text, no code fence."""
 
 
@@ -57,7 +56,6 @@ class _SlideDraft(pydantic.BaseModel):
     """What the model returns. Local to this stage: schemas.py stays unchanged."""
 
     title: str
-    bullets: list[str]
     example: Optional[str] = None
 
 
@@ -112,6 +110,14 @@ def speaker_notes(section: Section, rest: list[Statement], example: Statement | 
     return "\n".join(lines)
 
 
+def lecture_order(statements: list[Statement]) -> list[Statement]:
+    """By the first lecture time of each statement; statements with no lecture source (web only) go last, in notes order."""
+    def first_time(st: Statement) -> float:
+        times = [s.start for s in st.sources if s.type == "lecture"]
+        return min(times) if times else float("inf")
+    return sorted(statements, key=first_time)  # sorted() is stable: equal times keep the notes order
+
+
 def slide_for_section(
     section: Section, statements: list[Statement], *, job_id: str, client=None,
     max_bullets: int | None = None, max_words: int | None = None,
@@ -151,46 +157,37 @@ def slide_for_section(
 
     draft: _SlideDraft = result.value
     by_id = {st.id: st for st in statements}
-    chosen: list[Statement] = []
-    for sid in draft.bullets:
-        if sid in {st.id for st in chosen}:
-            info["dropped"].append({"id": sid, "reason": "duplicate_id"})
-        elif sid not in by_id:
-            info["dropped"].append({"id": sid, "reason": "unknown_statement_id"})
-        elif _words(by_id[sid].text) > max_words:
-            info["dropped"].append({"id": sid, "reason": "too_long_for_a_bullet (moved to speaker notes)"})
+    example_statement = None
+    if draft.example is not None:
+        if draft.example not in by_id:
+            info["dropped"].append({"id": draft.example, "reason": "unknown_statement_id"})
+        elif len(statements) == 1:  # a lone statement stays a bullet
+            info["dropped"].append({"id": draft.example, "reason": "example_is_the_only_bullet (kept as bullet)"})
         else:
-            chosen.append(by_id[sid])
+            example_statement = by_id[draft.example]
+            info["example_statement_id"] = example_statement.id
+    example = example_statement.text if example_statement else None
+
+    chosen: list[Statement] = []
+    for st in lecture_order(statements):
+        if example_statement is not None and st.id == example_statement.id:
+            continue
+        if _words(st.text) > max_words:
+            info["dropped"].append({"id": st.id, "reason": "too_long_for_a_bullet (moved to speaker notes)"})
+        else:
+            chosen.append(st)
     for st in chosen[max_bullets:]:
         info["dropped"].append({"id": st.id, "reason": "over_max_bullets (moved to speaker notes)"})
-    chosen = chosen[:max_bullets]
-    if not chosen:
+    bullets = chosen[:max_bullets]
+    if not bullets:
         info["flagged"] = "no_bullets"
         return SectionSlide(section.id, None, info)
-
-    example = None
-    if draft.example is not None:
-        match = next((st for st in chosen if st.id == draft.example), None)
-        if match is None:
-            info["dropped"].append({"id": draft.example, "reason": "example_not_in_bullets"})
-        else:
-            example = match.text
-            info["example_statement_id"] = match.id
 
     title = " ".join(draft.title.split())
     if not title or _words(title) > slides_config.SLIDE_MAX_TITLE_WORDS:
         info["dropped"].append({"id": None, "reason": "title_empty_or_too_long (section title used)"})
         title = section.title
-    example_statement = by_id[info["example_statement_id"]] if info["example_statement_id"] else None
-    if example_statement is not None:
-        bullets = [st for st in chosen if st.id != example_statement.id]  # nothing is printed twice
-        if not bullets:  # the example was the only choice: keep it as the bullet, no example box
-            bullets, example, example_statement = chosen, None, None
-            info["dropped"].append({"id": info["example_statement_id"], "reason": "example_is_the_only_bullet (kept as bullet)"})
-            info["example_statement_id"] = None
-    else:
-        bullets = chosen
-    used_ids = {st.id for st in chosen}
+    used_ids = {st.id for st in bullets} | ({example_statement.id} if example_statement else set())
     slide = Slide(
         section_id=section.id, title=title,
         bullets=[st.model_copy(deep=True) for st in bullets], example=example,

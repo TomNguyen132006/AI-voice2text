@@ -61,7 +61,7 @@ def router(kwargs, n):
     if system.startswith(judge.SYSTEM_PROMPT[:40]):
         return json.dumps([{"statement_id": s["id"], "verdict": "pass", "reason": "stated"} for s in payload["statements"]])
     if system.startswith(slides.SYSTEM_PROMPT[:40]):
-        return json.dumps({"title": "Gradient and steps", "bullets": [s["id"] for s in payload["statements"]], "example": None})
+        return json.dumps({"title": "Gradient and steps", "example": None})
     raise AssertionError(f"unknown stage prompt: {system[:60]}")
 
 
