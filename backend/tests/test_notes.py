@@ -7,6 +7,7 @@ import pytest
 
 import llm
 import notes
+import notes_config
 from schemas import Section, Segment, Statement
 from storage import LocalStorage, job_key, load_json, save_json, save_transcript
 from tests.test_clean import FakeClient, payload_of
@@ -332,3 +333,76 @@ def test_meta_start_statements_are_counted_not_dropped():
 
 def test_prompt_forbids_attribution_starts_without_numbers():
     assert "Do not start a note with an attribution" in notes.SYSTEM_PROMPT
+
+
+# --- web-only cap (quality tuning) -----------------------------------------------------------------------------
+
+CAP_SEGS = [
+    Segment(id="seg_0000", start=0.0, end=9.5, text="the hessian matrix and again the Hessian and the hessians"),
+    Segment(id="seg_0001", start=10.0, end=19.5, text="one eigenvalue here and one eigenvalue there"),
+]
+CAP_GAPS = [{"section_id": "sec_01", "term": t, "reason": "r"} for t in ("hessian", "eigenvalue", "convexity", "gradient")]
+CAP_SEARCH = [
+    {"section_id": "sec_01", "term": t, "query": "q", "results": [{"title": t.title(), "url": f"https://example.org/{t}", "snippet": f"About {t}."}]}
+    for t in ("hessian", "eigenvalue", "convexity", "gradient")
+]
+
+
+def cap_run(responder, **kw):
+    client = FakeClient(responder)
+    return notes.notes_for_section(
+        SECS[0], CAP_SEGS, job_id="job_n1", gaps=CAP_GAPS, search=CAP_SEARCH, all_segment_ids={s.id for s in CLEAN},
+        original=ORIGINAL, client=client, **kw)
+
+
+def four_web_only(k, n):
+    return reply(
+        note("Convexity is a property of functions.", "web_3"),   # term seen 0 times in the section
+        note("A gradient points uphill.", "web_4"),               # 0 times
+        note("An eigenvalue scales a vector.", "web_2"),          # 2 times
+        note("The Hessian holds second derivatives.", "web_1"),   # 3 times
+        note("The lecture says this.", "seg_0000"),
+    )
+
+
+def test_web_only_statements_are_capped_keeping_the_terms_most_used_in_the_section():
+    r = cap_run(four_web_only)
+    kept = [d.text for d in r.drafts]
+    assert kept == ["An eigenvalue scales a vector.", "The Hessian holds second derivatives.", "The lecture says this."]  # lecture order kept
+    capped = [d for d in r.info["dropped"] if d["reason"] == "web_only_cap"]
+    assert [d["text"] for d in capped] == ["Convexity is a property of functions.", "A gradient points uphill."]
+    assert r.info["n_web_only_cap"] == 2 and r.info["web_only"] == 2
+    report = notes.build_result("job_n1", [r], ORIGINAL).report
+    assert report["n_web_only_cap"] == 2
+
+
+def test_web_only_cap_is_exact_and_ties_keep_the_earlier_statement(monkeypatch):
+    two = lambda k, n: reply(note("Convexity is a property of functions.", "web_3"), note("A gradient points uphill.", "web_4"))
+    r = cap_run(two)
+    assert len(r.drafts) == 2 and r.info["n_web_only_cap"] == 0  # exactly at the cap: nothing dropped
+    three = lambda k, n: reply(note("Convexity is a property of functions.", "web_3"), note("A gradient points uphill.", "web_4"),
+                               note("Convexity again, now with more words.", "web_3"))
+    r = cap_run(three)
+    assert [d.text for d in r.drafts] == ["Convexity is a property of functions.", "A gradient points uphill."]  # all tie at 0: earlier win
+    assert r.info["n_web_only_cap"] == 1
+
+
+def test_web_only_cap_can_be_set_by_the_environment(monkeypatch):
+    assert notes_config.NOTES_MAX_WEB_ONLY_PER_SECTION == 2
+    monkeypatch.setenv("NOTES_MAX_WEB_ONLY_PER_SECTION", "1")
+    r = cap_run(four_web_only)
+    assert [d.text for d in r.drafts] == ["The Hessian holds second derivatives.", "The lecture says this."]
+    monkeypatch.setenv("NOTES_MAX_WEB_ONLY_PER_SECTION", "9")
+    assert len(cap_run(four_web_only).drafts) == 5
+
+
+def test_notes_and_judge_share_one_snippet_length(monkeypatch):
+    import judge_config
+    import search_config
+    assert notes_config.NOTES_SNIPPET_MAX_CHARS == judge_config.JUDGE_SNIPPET_MAX_CHARS == search_config.SNIPPET_MAX_CHARS == 1000
+    long = {"section_id": "sec_01", "term": "Hessian", "query": "q", "results": [{"title": "T", "url": "https://x.org/a", "snippet": "a" * 1500}]}
+    web = notes.web_for_section(SECS[0], GAPS, [long])
+    assert len(web["web_1"]["snippet"]) == 1000
+    monkeypatch.setenv("SNIPPET_MAX_CHARS", "300")  # one variable moves both
+    assert len(notes.web_for_section(SECS[0], GAPS, [long])["web_1"]["snippet"]) == 300
+    assert judge_config.snippet_max_chars() == notes_config.snippet_max_chars() == 300

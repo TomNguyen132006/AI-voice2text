@@ -95,6 +95,17 @@ def same_word_form(a: str, b: str) -> bool:
     return n >= MIN_PREFIX_WORD and a[:n] == b[:n]
 
 
+def count_term(term: str, text: str) -> int:
+    """How many times the words of term appear in text, in order and next to each other, up to word forms."""
+    want, have = _words(term), _words(text)
+    if not want:
+        return 0
+    return sum(
+        all(same_word_form(w, have[i + k]) for k, w in enumerate(want))
+        for i in range(len(have) - len(want) + 1)
+    )
+
+
 def mentions_term(term: str, text: str) -> bool:
     """Does text contain the words of term, in order and next to each other, up to word forms?"""
     want, have = _words(term), _words(text)
@@ -129,7 +140,7 @@ class NotesResult:
 def web_for_section(section: Section, gaps: list[dict], search: list[dict], snippet_max: int | None = None) -> dict:
     """{"web_1": {"term", "url", "title", "snippet"}, ...}: the results of the searches for THIS section's gaps,
     one id per url, in search order. Entries of other sections, or of terms that are no longer a gap here, are skipped."""
-    snippet_max = snippet_max or notes_config.NOTES_SNIPPET_MAX_CHARS
+    snippet_max = snippet_max or notes_config.snippet_max_chars()
     terms = {g["term"] for g in gaps if g.get("section_id") == section.id}
     out, seen = {}, set()
     for entry in search:
@@ -206,7 +217,7 @@ def notes_for_section(
     info = {
         "section_id": section.id, "title": section.title, "segments": len(segments), "web_results": len(web),
         "flagged": None, "error_message": None, "statements": 0, "with_web_source": 0,
-        "n_generated": 0, "n_cut_by_cap": 0, "n_meta_start": 0,
+        "n_generated": 0, "n_cut_by_cap": 0, "n_meta_start": 0, "n_web_only_cap": 0,
         "cited_segments": 0, "coverage": 0.0, "web_only": 0, "sources_per_statement": [],
         "dropped": [], "dropped_sources": [], "urls_removed": 0, "calls": result.calls, "tries": result.attempts,
         "prompt_tokens": result.prompt_tokens, "completion_tokens": result.completion_tokens,
@@ -222,6 +233,7 @@ def notes_for_section(
     info["n_generated"] = len(result.value)
     section_terms = [g["term"] for g in gaps if g.get("section_id") == section.id]
     kept: list[tuple[str, list[str], list[WebSource]]] = []
+    kept_terms: list[list[str]] = []  # the search terms of the web sources of each kept statement, same order as kept
     for n, item in enumerate(result.value, start=1):
         shown = " ".join(item.text.split())[:80]
         text = strip_urls(item.text)
@@ -244,6 +256,7 @@ def notes_for_section(
         for sid, _ in webs[max_web:]:
             info["dropped_sources"].append({"n": n, "source": sid, "reason": "over_max_web_sources"})
         lecture = lecture[:max_lecture]
+        terms = [web[sid]["term"] for sid, _ in webs[:max_web]]
         webs = [w for _, w in webs[:max_web]]
         if not lecture and not webs:
             info["dropped"].append({"n": n, "text": shown, "reason": "web_source_term_mismatch" if mismatch else "unsupported"})
@@ -252,6 +265,19 @@ def notes_for_section(
             info["dropped"].append({"n": n, "text": shown, "reason": "web_only_off_topic"})
             continue
         kept.append((text, lecture, webs))
+        kept_terms.append(terms)
+    # Web-only statements: keep at most NOTES_MAX_WEB_ONLY_PER_SECTION, those whose term appears most often in the lecture text of the section.
+    web_only = [i for i, (_, lecture, _) in enumerate(kept) if not lecture]
+    web_cap = notes_config.max_web_only_per_section()
+    if len(web_only) > web_cap:
+        section_text = " ".join(s.text for s in segments)
+        score = {i: sum(count_term(term, section_text) for term in kept_terms[i]) for i in web_only}
+        winners = set(sorted(web_only, key=lambda i: (-score[i], i))[:web_cap])  # ties: the earlier statement stays
+        for i in web_only:
+            if i not in winners:
+                info["dropped"].append({"n": i + 1, "text": kept[i][0][:80], "reason": "web_only_cap"})
+        info["n_web_only_cap"] = len(web_only) - web_cap
+        kept = [k for i, k in enumerate(kept) if i not in web_only or i in winners]
     for n, (text, _, _) in enumerate(kept[max_statements:], start=max_statements + 1):
         info["dropped"].append({"n": n, "text": text[:80], "reason": "over_max"})
     info["n_cut_by_cap"] = max(0, len(kept) - max_statements)
@@ -301,7 +327,7 @@ def build_result(job_id: str, per_section: list[SectionNotes], original: list[Se
         "urls_removed": sum(i["urls_removed"] for i in infos),
         "max_lecture_sources": notes_config.max_lecture_sources(), "max_web_sources": notes_config.max_web_sources(),
         "n_generated": sum(i["n_generated"] for i in infos), "n_cut_by_cap": sum(i["n_cut_by_cap"] for i in infos),
-        "n_meta_start": sum(i["n_meta_start"] for i in infos),
+        "n_meta_start": sum(i["n_meta_start"] for i in infos), "n_web_only_cap": sum(i["n_web_only_cap"] for i in infos),
         "sources_cut": sum(d["reason"].startswith("over_max_") for i in infos for d in i["dropped_sources"]),
         "calls": sum(i["calls"] for i in infos),
         "prompt_tokens": sum(i["prompt_tokens"] for i in infos),

@@ -308,3 +308,16 @@ def test_a_leaked_segment_of_another_section_is_caught(monkeypatch):
     gaps.find_gaps(SEGS, SECS, job_id="job_g1", client=FakeClient(lambda k, n: seen.setdefault(n, payload_of(k)) and "[]"))
     leaks = [leaked_from_other_sections(p, sec) for p, sec in zip(seen.values(), SECS)]
     assert all(leaks), leaks  # every call is flagged
+
+
+def test_default_is_three_and_the_environment_can_change_it(monkeypatch):
+    monkeypatch.delenv("GAPS_MAX_PER_SECTION", raising=False)
+    words = ["hessian", "matrix", "second", "derivatives", "condition"]
+    assert gaps.GAPS_MAX_PER_SECTION == 3 and gaps.max_per_section() == 3
+    r, _ = one(lambda k, n: reply(*[item(w) for w in words]))
+    assert [i["term"] for i in r.items] == words[:3]
+    monkeypatch.setenv("GAPS_MAX_PER_SECTION", "5")
+    r, _ = one(lambda k, n: reply(*[item(w) for w in words]))
+    assert [i["term"] for i in r.items] == words
+    monkeypatch.setenv("GAPS_MAX_PER_SECTION", "not a number")
+    assert gaps.max_per_section() == 3

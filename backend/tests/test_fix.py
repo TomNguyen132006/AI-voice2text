@@ -170,3 +170,29 @@ def test_fix_job_saves_files_and_reuses_judge_json(tmp_path):
     ultra_calls = len(models.judge_calls)
     fix.fix_job("job_f2", storage=storage, client=client)  # second run: judge.json is reused, not asked again
     assert len(models.judge_calls) == ultra_calls + 1  # only the re-judge of the rewrite
+
+
+def test_prompt_lets_the_fixer_drop_a_statement_that_teaches_nothing():
+    prompt = fix.SYSTEM_PROMPT
+    assert "teach something a student could be asked about" in prompt
+    assert "instead of a vague rewrite" in prompt and "there was a problem that was not easy to do" in prompt
+    assert not any(ch.isdigit() for ch in prompt.replace("st_0001", ""))
+
+
+def test_empty_answer_is_counted_as_dropped_empty():
+    models = Models(bad_first, fixer_for=lambda p: "")
+    result, _ = run([st(1, text="Bad claim one."), st(2, text="Bad claim two."), st(3)], models)
+    final = result.report["final"]
+    assert [s.id for s in result.statements] == ["st_0003"]
+    assert final["n_dropped_empty"] == 2 and final["dropped_by_reason"] == {"fixer_gave_up": 2}
+
+
+def test_vague_rewrite_is_dropped_when_the_fixer_follows_the_new_rule():
+    # the fixer sees the rule and answers with an empty text for a claim that has nothing left; a real rewrite is still fixed
+    def fixer(payload):
+        return "" if payload["statement"]["text"].startswith("Bad vague") else "A better statement."
+
+    models = Models(bad_first, fixer_for=fixer)
+    result, _ = run([st(1, text="Bad vague claim."), st(2, text="Bad claim with content.")], models)
+    assert [s.id for s in result.statements] == ["st_0002"] and result.report["final"]["n_dropped_empty"] == 1
+    assert result.report["final"]["fixed"] == 1

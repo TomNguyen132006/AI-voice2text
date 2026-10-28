@@ -31,7 +31,7 @@ from topics import load_sections
 ROLE = "super"
 STAGE = "gap_finder"
 
-GAPS_MAX_PER_SECTION = 5
+GAPS_MAX_PER_SECTION = 3  # default; the environment variable GAPS_MAX_PER_SECTION overrides it (see max_per_section())
 QUERY_MAX_CHARS = 80
 # Super's thinking counts as output tokens. A truncated answer is retried once with double.
 MAX_TOKENS = 16000
@@ -151,11 +151,20 @@ def _validate(parsed: list, section: Section, segments: list[Segment], max_items
     return kept[:max_items], dropped
 
 
+def max_per_section() -> int:
+    import os
+    try:
+        return max(1, int(os.getenv("GAPS_MAX_PER_SECTION") or GAPS_MAX_PER_SECTION))
+    except ValueError:
+        return GAPS_MAX_PER_SECTION
+
+
 def gaps_for_section(
     section: Section, segments: list[Segment], *, job_id: str, client=None,
-    max_items: int = GAPS_MAX_PER_SECTION, lecture_titles: list[str] | None = None,
+    max_items: int | None = None, lecture_titles: list[str] | None = None,
 ) -> SectionGaps:
     """One question to Super (plus one retry when the answer is cut off or unusable)."""
+    max_items = max_items or max_per_section()
     client = client or llm.make_client()
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT % max_items},
@@ -236,7 +245,7 @@ def build_result(job_id: str, per_section: list[SectionGaps]) -> GapsResult:
     per_section = dedupe_across_sections(per_section)
     report = {
         "job_id": job_id, "model_id": llm_config.get_role(ROLE).model_id,
-        "max_per_section": GAPS_MAX_PER_SECTION, "section_count": len(per_section),
+        "max_per_section": max_per_section(), "section_count": len(per_section),
         "gap_count": sum(len(g.items) for g in per_section),
         "flagged": [{"section_id": g.section_id, "reason": g.info["flagged"]}
                     for g in per_section if g.info["flagged"] and not g.items],

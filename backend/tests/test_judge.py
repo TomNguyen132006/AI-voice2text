@@ -216,3 +216,27 @@ def test_judge_job_saves_files(tmp_path):
     assert saved == result.verdicts and [v["verdict"] for v in saved] == ["pass", "no_source"]
     assert load_json(job_key("job_j2", "judge_report.json"), storage)["counts"]["no_source"] == 1
     assert "2 statements" in judge.format_table(result)
+
+
+def test_prompt_asks_for_the_lecture_meaning_of_the_term_for_web_only_statements():
+    prompt = judge.SYSTEM_PROMPT
+    assert "ALL web results" in prompt and "meaning that the lecture gives to the same term" in prompt
+    assert "enterprise data modeling" in prompt and "Do not apply this rule to a statement that cites at least one lecture id" in prompt
+    assert not any(ch.isdigit() for ch in prompt.replace("st_0001", ""))  # no numbers in the prompt
+
+
+def test_topic_change_verdict_from_the_judge_is_kept_for_web_only_statements_and_lecture_ones_are_untouched():
+    def responder(kwargs, n):
+        out = []
+        for s in payload_of(kwargs)["statements"]:
+            if s["sources"] == ["web_1"]:
+                out.append({"statement_id": s["id"], "verdict": "contradicts", "reason": "The lecture uses 'enterprise' for one organization; the web text is about enterprise data modeling."})
+            else:
+                out.append({"statement_id": s["id"], "verdict": "pass", "reason": "ok"})
+        return json.dumps(out)
+
+    result, client = run([st(1, sources=[web()]), st(2, sources=[lec(1)]), st(3, sources=[lec(1), web()])], responder)
+    got = by_id(result)
+    assert got["st_0001"]["verdict"] == "contradicts" and "enterprise" in got["st_0001"]["reason"] and got["st_0001"]["by"] == "ultra"
+    assert got["st_0002"]["verdict"] == "pass" and got["st_0003"]["verdict"] == "pass"
+    assert len(client.calls) == 1

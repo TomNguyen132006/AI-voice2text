@@ -3,6 +3,7 @@
 The provider can be overridden with the environment variable SEARCH_PROVIDER ("tavily" or "fake"),
 the query mode with SEARCH_QUERY_MODE ("term", "title" or "model").
 The API key is NOT here: it is read from the environment (TAVILY_API_KEY for Tavily).
+SNIPPET_MAX_CHARS can be overridden by the environment variable of the same name.
 """
 DEFAULT_PROVIDER = "tavily"  # "tavily" | "fake" (fake = no network, for tests and dry runs)
 
@@ -10,6 +11,7 @@ TAVILY_URL = "https://api.tavily.com/search"
 TAVILY_KEY_ENV = "TAVILY_API_KEY"
 
 SEARCH_MAX_RESULTS = 5
+SNIPPET_MAX_CHARS = 1000  # a web snippet longer than this is cut before it goes into a prompt; the notes writer and the judge use the SAME length
 SEARCH_DEPTH = "basic"  # Tavily: basic = 1 credit per search, advanced = 2
 SEARCH_TIMEOUT_SEC = 20.0
 SEARCH_INCLUDE_USAGE = True  # Tavily then reports the credits of each search; summed in search_report.json
@@ -18,6 +20,14 @@ SEARCH_MAX_RETRIES = 2  # after the first call, for timeouts, connection errors 
 RETRY_WAIT_BASE_SEC = 1.0  # wait 1 s, then 2 s
 RATE_LIMIT_DEFAULT_WAIT_SEC = 2.0  # 429 without a usable Retry-After header
 RETRY_AFTER_CAP_SEC = 30.0  # never wait longer than this, even if Retry-After says so
+
+def snippet_max_chars() -> int:
+    import os
+    try:
+        return max(1, int(os.getenv("SNIPPET_MAX_CHARS") or SNIPPET_MAX_CHARS))
+    except ValueError:
+        return SNIPPET_MAX_CHARS
+
 
 SEARCH_CACHE_TTL_DAYS = 7  # a cached answer older than this is fetched again
 SEARCH_CAP_PER_JOB = 15  # real provider calls per job; cache hits do not count
