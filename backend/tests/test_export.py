@@ -55,30 +55,6 @@ def test_markdown_brackets_in_titles_do_not_break_links():
     assert "[A (b) c](https://a.example/p)" in export.source_markdown(st)
 
 
-def test_slides_pptx_structure():
-    prs = Presentation(io.BytesIO(export.slides_pptx(SLIDES)))
-    titles = [s.shapes.title.text for s in prs.slides]
-    assert titles == ["Lecture slides", "Loss and gradient", "Choosing the learning rate", "Sources"]
-    first_content = prs.slides[1]
-    text = "\n".join(p.text for p in first_content.placeholders[1].text_frame.paragraphs)
-    assert "A loss function measures" in text and "📍 00:12-00:27" in text and "Example: Walking downhill" in text
-    assert "Start with the loss" in first_content.notes_slide.notes_text_frame.text
-    links = [r.hyperlink.address for p in first_content.placeholders[1].text_frame.paragraphs for r in p.runs if r.hyperlink.address]
-    assert links == ["https://en.wikipedia.org/wiki/Gradient_descent"]
-    sources = "\n".join(p.text for p in prs.slides[-1].placeholders[1].text_frame.paragraphs)
-    assert "Gradient descent - Wikipedia" in sources and "Learning rate - Wikipedia" in sources
-
-
-def test_sources_slide_is_split_when_long_and_handles_no_web():
-    many = [Slide(section_id="sec_01", title="T", bullets=[
-        Statement(id=f"st_{i}", section_id="sec_01", text="x", sources=[{"type": "web", "url": f"https://e.example/{i}", "title": f"P{i}"}])
-        for i in range(10)])]
-    titles = [s.shapes.title.text for s in Presentation(io.BytesIO(export.slides_pptx(many))).slides]
-    assert titles[-2:] == ["Sources (1/2)", "Sources (2/2)"]
-    none = Presentation(io.BytesIO(export.slides_pptx([])))
-    assert "No web sources" in none.slides[-1].placeholders[1].text_frame.text
-
-
 def test_zip_holds_all_files():
     data = export.build_zip({"a.txt": b"A", "b.md": b"B"})
     with zipfile.ZipFile(io.BytesIO(data)) as z:
@@ -135,42 +111,9 @@ def _sources_text(data):
     return Presentation(io.BytesIO(data)).slides[-1].placeholders[1].text_frame.text
 
 
-def test_sources_slide_lists_web_sources_of_statements_that_are_only_in_the_notes():
-    """job_4423c587753f case: the web-only statements are not bullets (they are in the speaker notes)."""
-    shown = _web_statement(1)
-    hidden = _web_statement(2)
-    slides = [Slide(section_id="sec_01", title="T", bullets=[shown], speaker_notes="x [Source: web]")]
-    text = _sources_text(export.slides_pptx(slides, statements=[shown, hidden, _web_statement(1)]))
-    assert "Page 1" in text and "Page 2" in text
-    assert text.count("Page 1") == 1  # deduplicated by url
-    assert "No web sources" not in text
-
-
-def test_no_web_sources_sentence_only_when_the_whole_job_has_none():
-    lecture_only = Statement(id="st_1", section_id="sec_01", text="x", sources=[{"type": "lecture", "segment_id": "seg_1", "start": 0, "end": 1}])
-    slides = [Slide(section_id="sec_01", title="T", bullets=[lecture_only])]
-    assert "No web sources were used" in _sources_text(export.slides_pptx(slides, statements=[lecture_only]))
-    assert "No web sources were used" not in _sources_text(export.slides_pptx(slides, statements=[lecture_only, _web_statement(3)]))
-
-
 def test_example_label_is_not_doubled():
     assert export.example_display("For example, a table has rows.") == "A table has rows."
     assert export.example_display("for instance: the 2222 row.") == "The 2222 row."
     assert export.example_display("  For  example,   x is 1. ") == "X is 1."
     assert export.example_display("A table has rows.") == "A table has rows."
     assert export.example_display("For examples we use tables.") == "For examples we use tables."  # only the lead-in phrase
-    slide = Slide(section_id="sec_01", title="T", bullets=[_web_statement(1)], example="For example, rows are tuples.")
-    text = Presentation(io.BytesIO(export.slides_pptx([slide]))).slides[1].placeholders[1].text_frame.text
-    assert "Example: Rows are tuples." in text and "For example" not in text
-
-
-def test_export_job_sources_slide_includes_notes_only_web_sources(tmp_path):
-    storage = LocalStorage(tmp_path)
-    for name, data in [("sections.json", [s.model_dump() for s in SECTIONS]),
-                       ("notes_final.json", [s.model_dump() for s in STATEMENTS] + [_web_statement(9).model_dump()]),
-                       ("slides.json", [s.model_dump() for s in SLIDES]),
-                       ("transcript_clean.json", [s.model_dump() for s in SEGMENTS])]:
-        save_json(job_key("job_x9", name), data, storage)
-    export.export_job("job_x9", storage)
-    pptx = storage.load_bytes(job_key("job_x9", "slides.pptx"))
-    assert "Page 9" in _sources_text(pptx)

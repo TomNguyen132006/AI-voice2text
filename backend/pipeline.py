@@ -126,7 +126,7 @@ def _export_stage(job_id, storage, client, warnings):
     import slides
     result = slides.slides_job(job_id, storage=storage, client=client, statements_file="notes_final.json")
     warnings.extend(result.report["warnings"])
-    export.export_job(job_id, storage)
+    export.export_job(job_id, storage, warnings=warnings)
 
 
 def run_pipeline(job_id: str, filename: str, storage=None, client=None, engine=None, provider=None) -> Job:

@@ -11,20 +11,16 @@ All of them are built from files the earlier stages saved, by code only (no mode
 Usage (from backend/):  python -m export <job_id>     (writes the three files next to the other job files)
 """
 import io
-import re
 import sys
 import zipfile
 
-from pptx import Presentation
-from pptx.util import Pt
-
+from deck import build_deck, example_display  # noqa: F401  (example_display is re-exported)
 from schemas import Section, Segment, Slide, Statement
 from storage import get_storage, job_key, load_json, load_transcript
 from topics import load_sections
 
 FILES = {"txt": "transcript.txt", "md": "notes.md", "pptx": "slides.pptx"}
 ZIP_NAME = "all.zip"
-SOURCES_PER_SLIDE = 8
 
 
 def clock(seconds: float) -> str:
@@ -103,69 +99,14 @@ def _add_sources(paragraph, statement: Statement, size: int) -> None:
             run(f"  🌐 {s.title or s.url}", link=s.url)
 
 
-EXAMPLE_LEAD = re.compile(r"^\s*for\s+(example|instance)\s*[,:]\s*", re.IGNORECASE)
-
-
-def example_display(text: str) -> str:
-    """For display only: the label is "Example:", so a leading "For example," / "For instance," is removed. notes.json is not changed."""
-    text = " ".join(text.split())
-    stripped = EXAMPLE_LEAD.sub("", text, count=1)
-    return stripped[:1].upper() + stripped[1:] if stripped != text and stripped else text
-
-
-def slides_pptx(slides: list[Slide], title: str = "Lecture slides", statements: list[Statement] | None = None) -> bytes:
-    """statements = every statement of the job (also the ones that are only in the speaker notes): the Sources slide lists the web sources of all of them."""
-    prs = Presentation()
-    first = prs.slides.add_slide(prs.slide_layouts[0])
-    first.shapes.title.text = title
-    first.placeholders[1].text = "Every point shows its source: 📍 lecture time, 🌐 web link"
-
-    web_sources: dict[str, str] = {}
-    for slide in slides:
-        s = prs.slides.add_slide(prs.slide_layouts[1])
-        s.shapes.title.text = slide.title
-        body = s.placeholders[1].text_frame
-        body.word_wrap = True
-        size = _fit_font([b.text for b in slide.bullets] + [slide.example or ""])
-        for n, bullet in enumerate(slide.bullets):
-            p = body.paragraphs[0] if n == 0 else body.add_paragraph()
-            r = p.add_run()
-            r.text = " ".join(bullet.text.split())
-            r.font.size = Pt(size)
-            _add_sources(p, bullet, size)
-            for src in bullet.sources:
-                if src.type == "web":
-                    web_sources.setdefault(src.url, src.title or src.url)
-        if slide.example:
-            p = body.add_paragraph()
-            r = p.add_run()
-            r.text = f"Example: {example_display(slide.example)}"
-            r.font.size = Pt(size - 2)
-            r.font.italic = True
-        s.notes_slide.notes_text_frame.text = slide.speaker_notes
-
-    for statement in statements or []:
-        for src in statement.sources:
-            if src.type == "web":
-                web_sources.setdefault(src.url, src.title or src.url)
-    items = list(web_sources.items())
-    pages = [items[i : i + SOURCES_PER_SLIDE] for i in range(0, len(items), SOURCES_PER_SLIDE)] or [[]]
-    for page_no, page in enumerate(pages, start=1):
-        s = prs.slides.add_slide(prs.slide_layouts[1])
-        s.shapes.title.text = "Sources" + (f" ({page_no}/{len(pages)})" if len(pages) > 1 else "")
-        body = s.placeholders[1].text_frame
-        body.word_wrap = True
-        if not page:
-            body.text = "No web sources were used. Every point comes from the lecture (📍 time ranges are on each slide)."
-        for n, (url, name) in enumerate(page):
-            p = body.paragraphs[0] if n == 0 else body.add_paragraph()
-            r = p.add_run()
-            r.text = f"🌐 {name}"
-            r.font.size = Pt(16)
-            r.hyperlink.address = url
-    buffer = io.BytesIO()
-    prs.save(buffer)
-    return buffer.getvalue()
+def slides_pptx(
+    slides: list[Slide], title: str = "Lecture notes", statements: list[Statement] | None = None,
+    sections: list[Section] | None = None, status: dict[str, str] | None = None, judged: bool | None = None,
+    warnings: list[str] | None = None,
+) -> bytes:
+    """The deck. The drawing is in deck.py. statements = every statement of the job (also the ones that are only in the
+    speaker notes): the Sources slide lists the web sources of all of them. Warnings (bullets moved to the notes) are appended to `warnings`."""
+    return build_deck(slides, title=title, statements=statements, sections=sections, status=status, judged=judged, warnings=warnings)
 
 
 def build_zip(files: dict[str, bytes]) -> bytes:
@@ -191,6 +132,20 @@ def _load_statements(job_id: str, storage=None) -> tuple[list[Statement], bool]:
     raise FileNotFoundError(job_key(job_id, "notes_final.json"))
 
 
+def _judge_status(job_id: str, statements: list[Statement], storage=None) -> dict[str, str] | None:
+    """{statement_id: "verified" | "rewritten" | "not judged"} from judge.json and fix_log.json, or None when judge.json does not exist.
+    "rewritten" = the judge rejected the first text, Super rewrote it, and the second check passed."""
+    try:
+        verdicts = {v["statement_id"]: v["verdict"] for v in load_json(job_key(job_id, "judge.json"), storage)}
+    except FileNotFoundError:
+        return None
+    try:
+        fixed = {e["statement_id"] for e in load_json(job_key(job_id, "fix_log.json"), storage) if e.get("outcome") == "fixed"}
+    except FileNotFoundError:
+        fixed = set()
+    return {st.id: "rewritten" if st.id in fixed else "verified" if verdicts.get(st.id) == "pass" else "not judged" for st in statements}
+
+
 def _load_clean(job_id: str, storage=None) -> list[Segment]:
     try:
         return [Segment(**s) for s in load_json(job_key(job_id, "transcript_clean.json"), storage)]
@@ -198,8 +153,9 @@ def _load_clean(job_id: str, storage=None) -> list[Segment]:
         return load_transcript(job_id, storage)
 
 
-def export_job(job_id: str, storage=None) -> dict[str, str]:
-    """Write transcript.txt, notes.md and slides.pptx into the job's storage; return {"txt": key, "md": key, "pptx": key}."""
+def export_job(job_id: str, storage=None, warnings: list[str] | None = None) -> dict[str, str]:
+    """Write transcript.txt, notes.md and slides.pptx into the job's storage; return {"txt": key, "md": key, "pptx": key}.
+    Deck warnings (bullets moved to the speaker notes because they did not fit) are appended to `warnings` when it is given."""
     storage = storage or get_storage()
     sections = load_sections(job_id, storage)
     statements, judged = _load_statements(job_id, storage)
@@ -207,7 +163,8 @@ def export_job(job_id: str, storage=None) -> dict[str, str]:
     data = {
         "txt": transcript_txt(_load_clean(job_id, storage)).encode("utf-8"),
         "md": notes_md(sections, statements, judged=judged).encode("utf-8"),
-        "pptx": slides_pptx(slides, statements=statements),
+        "pptx": slides_pptx(slides, statements=statements, sections=sections, judged=judged,
+                            status=_judge_status(job_id, statements, storage) if judged else None, warnings=warnings),
     }
     keys = {}
     for kind, content in data.items():
