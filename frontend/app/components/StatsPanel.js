@@ -40,7 +40,7 @@ const clip = (text, max = 90) => (text.length > max ? `${text.slice(0, max - 1)}
 export default function StatsPanel({ stats, statements = [] }) {
   if (stats === undefined) {
     return (
-      <p role="status" className="min-h-14 rounded-lg border border-line bg-surface px-4 py-4 text-muted">
+      <p role="status" className="min-h-14 rounded-xl border border-line bg-surface px-5 py-4 text-muted">
         Loading how this was made…
       </p>
     )
@@ -49,20 +49,25 @@ export default function StatsPanel({ stats, statements = [] }) {
   const { calls, judge } = stats
   const total = calls.total
   const steps = Object.entries(calls.by_stage)
+  const modelsUsed = [...new Set(steps.map(([, row]) => modelName(row.model_id)))]
   const rejected = Object.entries(judge?.rejected_by_verdict || {})
   const textOf = Object.fromEntries(statements.map((s) => [s.id, s.text]))
   const perStage = STAGES.filter(([key]) => stats.seconds_per_stage?.[key] !== undefined)
 
   return (
     <section aria-labelledby="stats-heading" className="md:relative md:left-1/2 md:w-[min(960px,calc(100vw-3rem))] md:-translate-x-1/2">
-      <details className="rounded-lg border border-line bg-surface">
-        <summary id="stats-heading" className="cursor-pointer px-4 py-3 font-medium">
+      <details className="rounded-xl border border-line bg-surface">
+        <summary id="stats-heading" className="cursor-pointer px-5 py-4 font-semibold text-navy">
           How this was made: {total.calls} model calls, {duration(stats.total_seconds)}, about {money(total.est_cost_usd)}
           {total.cost_is_lower_bound ? ' (at least)' : ''}
         </summary>
-        <div className="flex flex-col gap-6 border-t border-line px-4 py-4">
+        <div className="flex flex-col gap-6 border-t border-line px-5 py-5">
+          <p>
+            <span className="font-semibold text-navy">Models used: </span>
+            {modelsUsed.join(', ')}. Speech to text (NVIDIA Parakeet) is used only when an audio file is uploaded to a server with a GPU.
+          </p>
           <div>
-            <h3 className="mb-2 font-semibold">Models and cost by step</h3>
+            <h3 className="mb-2 text-lg font-bold">Models and cost by step</h3>
             <div role="region" aria-label="Model usage by step" tabIndex={0} className="overflow-x-auto">
               <table className="w-full min-w-[34rem] text-left">
                 <thead className="text-muted">
@@ -106,14 +111,12 @@ export default function StatsPanel({ stats, statements = [] }) {
                 </tfoot>
               </table>
             </div>
-            <p className="mt-2 text-muted">
-              Speech to text (NVIDIA Parakeet) runs only when an audio file is uploaded to a server with a GPU. It is not in these numbers.
-            </p>
+            <p className="mt-2 text-muted">Speech to text (Parakeet) is not in these numbers.</p>
           </div>
 
           {perStage.length > 0 && (
             <div>
-              <h3 className="mb-2 font-semibold">Time by stage</h3>
+              <h3 className="mb-2 text-lg font-bold">Time by stage</h3>
               <ul className="flex flex-wrap gap-x-5 gap-y-1 text-muted">
                 {perStage.map(([key, title]) => (
                   <li key={key}>
@@ -126,7 +129,7 @@ export default function StatsPanel({ stats, statements = [] }) {
 
           {judge && judge.statements !== undefined && (
             <div>
-              <h3 className="mb-2 font-semibold">Judge</h3>
+              <h3 className="mb-2 text-lg font-bold">Judge</h3>
               <p>
                 {judge.passed_first_time} of {judge.statements} notes passed the first check
                 {rejected.length > 0 && '. Rejected: '}
