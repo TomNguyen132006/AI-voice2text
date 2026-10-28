@@ -78,17 +78,6 @@ def test_bullets_are_in_lecture_order_not_notes_order_and_web_only_go_last():
     assert [x.id for x in r.slide.bullets] == ["st_0003", "st_0004", "st_0001", "st_0002"]
 
 
-def test_example_is_not_printed_twice_and_its_source_goes_to_the_speaker_notes():
-    r, _ = one(lambda k, n: answer("st_0002"), max_bullets=1)
-    slide = r.slide
-    assert slide.example not in [b.text for b in slide.bullets]
-    notes = slide.speaker_notes.splitlines()
-    assert notes[0] == STATEMENTS[2].text  # neither bullet nor example (over the bullet limit)
-    assert notes[1] == ("Source of the example: lecture 00:01-00:09 (seg_0000); "
-                        "web: Hessian matrix - Wiki <https://en.wikipedia.org/wiki/Hessian_matrix>.")
-    assert notes[-1].startswith("Lecture time of this section")
-
-
 def test_a_section_with_one_statement_keeps_it_as_a_bullet_without_example():
     r, _ = one(lambda k, n: answer("st_0002"), statements=[STATEMENTS[1]])
     assert [b.id for b in r.slide.bullets] == ["st_0002"] and r.slide.example is None and r.info["example_statement_id"] is None
@@ -101,37 +90,11 @@ def test_model_cannot_change_the_text_or_pick_bullets():
     assert "NEW CLAIM" not in r.slide.model_dump_json()
 
 
-def test_speaker_notes_hold_only_statement_texts_and_the_time_range():
-    r, _ = one(lambda k, n: answer(None), max_bullets=1)
-    assert r.slide.speaker_notes.splitlines() == [
-        STATEMENTS[1].text, STATEMENTS[2].text, "Lecture time of this section: 00:00 - 01:15 (to listen again).",
-    ]
-    r2, _ = one(lambda k, n: answer(None), section=SECS[1])
-    assert r2.slide.speaker_notes == "Lecture time of this section: 01:15 - 1:01:40 (to listen again)."
-
-
 def test_unknown_and_foreign_example_ids_are_dropped():
     for bad in ("st_9999", "st_0004"):  # st_0004 belongs to the other section
         r, _ = one(lambda k, n: answer(bad))
         assert r.slide.example is None and len(r.slide.bullets) == 3
         assert [(d["id"], d["reason"]) for d in r.info["dropped"]] == [(bad, "unknown_statement_id")]
-
-
-def test_too_many_bullets_are_cut_after_lecture_order_and_move_to_the_notes():
-    many = [st(n, text=f"Note {n}.") for n in range(1, 8)]
-    r, _ = one(lambda k, n: answer(None), statements=many)
-    assert len(r.slide.bullets) == 5  # default SLIDE_MAX_BULLETS
-    assert [d["id"] for d in r.info["dropped"]] == ["st_0006", "st_0007"]
-    assert "Note 6." in r.slide.speaker_notes and "Note 7." in r.slide.speaker_notes
-    r, _ = one(lambda k, n: answer(None), statements=many, max_bullets=2)
-    assert len(r.slide.bullets) == 2
-
-
-def test_example_does_not_count_against_the_bullet_limit():
-    many = [st(n, text=f"Note {n}.") for n in range(1, 8)]
-    r, _ = one(lambda k, n: answer("st_0003"), statements=many)
-    assert [b.id for b in r.slide.bullets] == ["st_0001", "st_0002", "st_0004", "st_0005", "st_0006"]
-    assert r.slide.example == "Note 3."
 
 
 def test_default_bullet_limit_is_not_below_five():
@@ -218,3 +181,98 @@ def test_slides_report_lists_the_example_statement_id_per_slide():
         {"section_id": "sec_01", "example_statement_id": "st_0002"},
         {"section_id": "sec_02", "example_statement_id": None},
     ]
+
+
+SRC = "[Source: lecture 00:01-00:09 (seg_0000); web: Hessian matrix - Wiki <https://en.wikipedia.org/wiki/Hessian_matrix>]"
+
+
+def test_example_is_not_printed_twice_and_its_source_goes_to_the_speaker_notes():
+    r, _ = one(lambda k, n: answer("st_0002"), max_bullets=1)
+    slide = r.slide
+    assert slide.example not in [b.text for b in slide.bullets]
+    notes = slide.speaker_notes.splitlines()
+    assert notes[0] == f"{STATEMENTS[2].text} {SRC}"  # neither bullet nor example (over the bullet limit)
+    assert notes[1] == ("Source of the example: lecture 00:01-00:09 (seg_0000); "
+                        "web: Hessian matrix - Wiki <https://en.wikipedia.org/wiki/Hessian_matrix>.")
+    assert notes[-1].startswith("Lecture time of this section")
+
+
+def test_every_statement_in_the_speaker_notes_carries_its_sources():
+    r, _ = one(lambda k, n: answer(None), max_bullets=1)
+    lines = r.slide.speaker_notes.splitlines()
+    assert lines[:2] == [f"{STATEMENTS[1].text} {SRC}", f"{STATEMENTS[2].text} {SRC}"]
+    web_only = st(7, text="Web only note.", sources=[WEB])
+    r, _ = one(lambda k, n: answer(None), statements=[STATEMENTS[0], web_only], max_bullets=1)
+    assert f"Web only note. [Source: web: {WEB['title']} <{WEB['url']}>]" in r.slide.speaker_notes
+
+
+def test_a_statement_without_sources_is_never_printed_in_the_notes():
+    bare = st(7, text="Bare claim.", sources=[])
+    r, _ = one(lambda k, n: answer(None), statements=[STATEMENTS[0], bare], max_bullets=1)
+    assert "Bare claim." not in r.slide.speaker_notes
+    assert ("st_0007", "no_source_not_printed_in_notes") in [(d["id"], d["reason"]) for d in r.info["dropped"]]
+
+
+def test_too_long_statement_in_the_notes_keeps_its_source():
+    long = st(1, text=("word " * 40).strip())
+    r, _ = one(lambda k, n: answer(None), statements=[long, STATEMENTS[1]])
+    assert ("word " * 40).strip() + f" {SRC}" in r.slide.speaker_notes
+
+
+def test_speaker_notes_hold_only_statement_texts_sources_and_the_time_range():
+    r, _ = one(lambda k, n: answer(None), max_bullets=1)
+    assert r.slide.speaker_notes.splitlines() == [
+        f"{STATEMENTS[1].text} {SRC}", f"{STATEMENTS[2].text} {SRC}",
+        "Lecture time of this section: 00:00 - 01:15 (to listen again).",
+    ]
+    r2, _ = one(lambda k, n: answer(None), section=SECS[1])
+    assert r2.slide.speaker_notes == "Lecture time of this section: 01:15 - 1:01:40 (to listen again)."
+
+
+def test_too_many_bullets_are_cut_after_lecture_order_and_move_to_the_notes():
+    many = [st(n, text=f"Note {n}.") for n in range(1, 10)]
+    r, _ = one(lambda k, n: answer(None), statements=many)
+    assert len(r.slide.bullets) == 7  # default SLIDE_MAX_BULLETS
+    assert [d["id"] for d in r.info["dropped"]] == ["st_0008", "st_0009"]
+    assert "Note 8." in r.slide.speaker_notes and "Note 9." in r.slide.speaker_notes
+    r, _ = one(lambda k, n: answer(None), statements=many, max_bullets=2)
+    assert len(r.slide.bullets) == 2
+
+
+def test_example_does_not_count_against_the_bullet_limit():
+    many = [st(n, text=f"Note {n}.") for n in range(1, 10)]
+    r, _ = one(lambda k, n: answer("st_0003"), statements=many)
+    assert [b.id for b in r.slide.bullets] == ["st_0001", "st_0002", "st_0004", "st_0005", "st_0006", "st_0007", "st_0008"]
+    assert r.slide.example == "Note 3."
+
+
+def test_text_budget_decides_how_many_bullets_fit():
+    wide = [st(n, text=("word " * 12).strip() + f" {n}") for n in range(1, 8)]  # about 62 characters each
+    r, _ = one(lambda k, n: answer(None), statements=wide, max_chars=200)
+    assert len(r.slide.bullets) == 3  # 3 x 62 fit in 200, the 4th does not
+    assert [d["reason"].split(" ")[0] for d in r.info["dropped"]] == ["over_text_budget"] * 4
+    r, _ = one(lambda k, n: answer(None), statements=wide, max_chars=10)
+    assert len(r.slide.bullets) == 1  # the first statement is always shown
+    r, _ = one(lambda k, n: answer(None), statements=wide)
+    assert len(r.slide.bullets) == 7  # 7 x 62 fits in the default budget
+
+
+def test_list_title_with_statements_in_the_notes_gets_a_warning_naming_them():
+    many = [st(n, text=f"Note {n}.") for n in range(1, 10)]
+    r, _ = one(lambda k, n: answer(None, title="Kinds of models"), statements=many)
+    assert len(r.info["warnings"]) == 1 and "promises a list" in r.info["warnings"][0]
+    assert "st_0008, st_0009" in r.info["warnings"][0]
+    report = slides.build_result("job_s1", [r]).report
+    assert report["warnings"] == r.info["warnings"] and "WARNING" in slides.format_table(slides.SlidesResult([], report))
+    # no guessing: the bullets are still the first seven in lecture order
+    assert [b.id for b in r.slide.bullets] == [f"st_{n:04d}" for n in range(1, 8)]
+    r, _ = one(lambda k, n: answer(None, title="Why it works"), statements=many)
+    assert r.info["warnings"] == []  # the title does not promise a list
+    r, _ = one(lambda k, n: answer(None, title="Kinds of models"))
+    assert r.info["warnings"] == []  # nothing went to the notes
+
+
+def test_promises_list():
+    for t in ("Data Model Types", "Properties of S", "Kinds of data", "Steps"):
+        assert slides.promises_list(t)
+    assert not slides.promises_list("Why gradients matter")

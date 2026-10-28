@@ -9,15 +9,20 @@ claim and does not pick the bullets. Code builds the schemas.Slide:
                  twice. Slide.example is a plain string without sources, so code writes the sources of the example
                  into the speaker notes ("Source of the example: ..."); the statement itself, with its sources,
                  stays in notes.json. (A section with only one statement keeps it as a bullet, with no example.)
-- speaker_notes = built by code only: the statements that are not shown (their texts), the source line of the
-                 example, and the lecture time range of the section for re-listening. The model writes no free text.
+- speaker_notes = built by code only: the statements that are not shown (their texts, EACH WITH ITS SOURCES: lecture
+                 times, web title and url), the source line of the example, and the lecture time range of the section for
+                 re-listening. The model writes no free text.
 - title        = the model's short label (a name for the topic, not a claim); a title that is empty or
                  too long is replaced by the section title.
 Limits (slides_config.py) are enforced by code: an unknown example id (not in this section) is dropped;
-more than SLIDE_MAX_BULLETS bullets are cut (the later ones in lecture order); a statement of more than SLIDE_MAX_WORDS_PER_BULLET words is
+more than SLIDE_MAX_BULLETS bullets, or more text than SLIDE_MAX_BULLET_CHARS (bullets plus example), are cut (the
+later ones in lecture order; the first statement that does not fit and all after it go to the notes); a statement of more than SLIDE_MAX_WORDS_PER_BULLET words is
 not shown as a bullet (it is not shortened, because that would be rewriting it). Cut and long statements
 move to the speaker notes, so nothing is lost. A slide without bullets is flagged and left out; a section
 whose call fails is flagged and the others go on.
+
+A slide whose title promises a list ("Types", "Kinds", "Properties" ...) and whose statements did not all fit gets a
+warning in slides_report.json ("warnings") naming the statements that went to the notes. Nothing is guessed or reordered.
 
 Usage (from backend/):  python -m slides <job_id>
 
@@ -26,6 +31,7 @@ Files per job:
     jobs/{id}/slides_report.json   dropped items with reasons, flagged sections, calls, tokens, cost
 """
 import json
+import re
 from dataclasses import dataclass
 from typing import Optional
 
@@ -88,7 +94,7 @@ def _clock(seconds: float) -> str:
     return f"{total // 3600:d}:{total % 3600 // 60:02d}:{total % 60:02d}" if total >= 3600 else f"{total // 60:02d}:{total % 60:02d}"
 
 
-def source_line(statement: Statement) -> str:
+def source_text(statement: Statement) -> str:
     """Where a statement comes from, built from its sources: lecture times and segment ids, web titles and urls."""
     parts = []
     lecture = [s for s in statement.sources if s.type == "lecture"]
@@ -96,18 +102,30 @@ def source_line(statement: Statement) -> str:
         times = ", ".join(f"{_clock(s.start)}-{_clock(s.end)}" for s in lecture)
         parts.append(f"lecture {times} ({', '.join(s.segment_id for s in lecture)})")
     parts += [f"web: {s.title} <{s.url}>" if s.title else f"web: <{s.url}>" for s in statement.sources if s.type == "web"]
-    return "Source of the example: " + "; ".join(parts) + "."
+    return "; ".join(parts)
+
+
+def source_line(statement: Statement) -> str:
+    return "Source of the example: " + source_text(statement) + "."
 
 
 def speaker_notes(section: Section, rest: list[Statement], example: Statement | None = None) -> str:
     """Only text copied from statements, plus the source of the example and the lecture time range.
     No sentence written by a model. Slide.example is a plain string without sources, so the sources of the
     example statement are written here, by code."""
-    lines = [st.text for st in rest]
+    lines = [f"{st.text} [Source: {source_text(st)}]" for st in rest if st.sources]  # never a statement without its source
     if example is not None:
         lines.append(source_line(example))
     lines.append(f"Lecture time of this section: {_clock(section.start)} - {_clock(section.end)} (to listen again).")
     return "\n".join(lines)
+
+
+LIST_TITLE = re.compile(r"\b(types?|kinds?|properties|categories|classes|steps|stages|components|parts|features|characteristics|"
+                        r"advantages|disadvantages|benefits|models|methods|ways|elements|levels|layers|principles|rules|examples)\b", re.IGNORECASE)
+
+
+def promises_list(title: str) -> bool:
+    return bool(LIST_TITLE.search(title))
 
 
 def lecture_order(statements: list[Statement]) -> list[Statement]:
@@ -120,14 +138,15 @@ def lecture_order(statements: list[Statement]) -> list[Statement]:
 
 def slide_for_section(
     section: Section, statements: list[Statement], *, job_id: str, client=None,
-    max_bullets: int | None = None, max_words: int | None = None,
+    max_bullets: int | None = None, max_words: int | None = None, max_chars: int | None = None,
 ) -> SectionSlide:
     """One question to Super (plus one retry from call_validated). Never raises."""
     max_bullets = max_bullets or slides_config.max_bullets()
     max_words = max_words or slides_config.max_words_per_bullet()
+    max_chars = max_chars or slides_config.max_bullet_chars()
     info = {
         "section_id": section.id, "title": section.title, "statements_in": len(statements), "bullets": 0,
-        "example_statement_id": None, "slide_title": None, "flagged": None, "error_message": None, "dropped": [],
+        "example_statement_id": None, "slide_title": None, "flagged": None, "error_message": None, "dropped": [], "warnings": [],
         "calls": 0, "tries": 0, "prompt_tokens": 0, "completion_tokens": 0, "est_cost_usd": 0.0,
         "cost_is_lower_bound": False, "latency_ms": 0, "steps": [],
     }
@@ -176,9 +195,20 @@ def slide_for_section(
             info["dropped"].append({"id": st.id, "reason": "too_long_for_a_bullet (moved to speaker notes)"})
         else:
             chosen.append(st)
-    for st in chosen[max_bullets:]:
-        info["dropped"].append({"id": st.id, "reason": "over_max_bullets (moved to speaker notes)"})
-    bullets = chosen[:max_bullets]
+    bullets: list[Statement] = []
+    used = len(example or "")
+    for i, st in enumerate(chosen):
+        if len(bullets) >= max_bullets:
+            reason = "over_max_bullets (moved to speaker notes)"
+        elif bullets and used + len(st.text) > max_chars:
+            reason = "over_text_budget (moved to speaker notes)"
+        else:
+            bullets.append(st)
+            used += len(st.text)
+            continue
+        for rest_st in chosen[i:]:  # the first statement that does not fit, and every later one, go to the notes
+            info["dropped"].append({"id": rest_st.id, "reason": reason})
+        break
     if not bullets:
         info["flagged"] = "no_bullets"
         return SectionSlide(section.id, None, info)
@@ -188,10 +218,18 @@ def slide_for_section(
         info["dropped"].append({"id": None, "reason": "title_empty_or_too_long (section title used)"})
         title = section.title
     used_ids = {st.id for st in bullets} | ({example_statement.id} if example_statement else set())
+    not_shown = [st for st in statements if st.id not in used_ids]
+    for st in not_shown:
+        if not st.sources:
+            info["dropped"].append({"id": st.id, "reason": "no_source_not_printed_in_notes"})
+    moved = [d["id"] for d in info["dropped"] if d["id"] in by_id and d["reason"].split(" ")[0] in ("over_max_bullets", "over_text_budget", "too_long_for_a_bullet")]
+    if moved and (promises_list(title) or promises_list(section.title)):
+        info["warnings"].append(f"slide \"{title}\" ({section.id}) promises a list but {len(moved)} of {len(statements)} statements went to the speaker notes: "
+                                + ", ".join(moved))
     slide = Slide(
         section_id=section.id, title=title,
         bullets=[st.model_copy(deep=True) for st in bullets], example=example,
-        speaker_notes=speaker_notes(section, [st for st in statements if st.id not in used_ids], example_statement),
+        speaker_notes=speaker_notes(section, not_shown, example_statement),
     )
     info["bullets"], info["slide_title"] = len(bullets), title
     return SectionSlide(section.id, slide, info)
@@ -201,7 +239,7 @@ def build_result(job_id: str, per_section: list[SectionSlide]) -> SlidesResult:
     infos = [s.info for s in per_section]
     report = {
         "job_id": job_id, "model_id": llm_config.get_role(ROLE).model_id,
-        "max_bullets": slides_config.max_bullets(), "max_words_per_bullet": slides_config.max_words_per_bullet(),
+        "max_bullets": slides_config.max_bullets(), "max_bullet_chars": slides_config.max_bullet_chars(), "max_words_per_bullet": slides_config.max_words_per_bullet(),
         "section_count": len(per_section),
         "slides": [{"section_id": s.section_id, "example_statement_id": s.info["example_statement_id"]}
                    for s in per_section if s.slide is not None],
@@ -209,6 +247,7 @@ def build_result(job_id: str, per_section: list[SectionSlide]) -> SlidesResult:
         "flagged": [{"section_id": i["section_id"], "reason": i["flagged"], "message": i["error_message"]}
                     for i in infos if i["flagged"]],
         "dropped": [{"section_id": i["section_id"], **d} for i in infos for d in i["dropped"]],
+        "warnings": [w for i in infos for w in i["warnings"]],
         "calls": sum(i["calls"] for i in infos),
         "prompt_tokens": sum(i["prompt_tokens"] for i in infos),
         "completion_tokens": sum(i["completion_tokens"] for i in infos),
@@ -260,6 +299,7 @@ def format_table(result: SlidesResult) -> str:
                   f"cost ${r['est_cost_usd']:.5f}{' (lower bound)' if r['cost_is_lower_bound'] else ''}"]
     lines += [f"  dropped {d['section_id']} {d['id']}: {d['reason']}" for d in r["dropped"]]
     lines += [f"  FLAGGED {f['section_id']}: {f['reason']} ({f['message']})" for f in r["flagged"]]
+    lines += [f"  WARNING {w}" for w in r["warnings"]]
     return "\n".join(lines)
 
 

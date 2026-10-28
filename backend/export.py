@@ -11,6 +11,7 @@ All of them are built from files the earlier stages saved, by code only (no mode
 Usage (from backend/):  python -m export <job_id>     (writes the three files next to the other job files)
 """
 import io
+import re
 import sys
 import zipfile
 
@@ -102,7 +103,18 @@ def _add_sources(paragraph, statement: Statement, size: int) -> None:
             run(f"  🌐 {s.title or s.url}", link=s.url)
 
 
-def slides_pptx(slides: list[Slide], title: str = "Lecture slides") -> bytes:
+EXAMPLE_LEAD = re.compile(r"^\s*for\s+(example|instance)\s*[,:]\s*", re.IGNORECASE)
+
+
+def example_display(text: str) -> str:
+    """For display only: the label is "Example:", so a leading "For example," / "For instance," is removed. notes.json is not changed."""
+    text = " ".join(text.split())
+    stripped = EXAMPLE_LEAD.sub("", text, count=1)
+    return stripped[:1].upper() + stripped[1:] if stripped != text and stripped else text
+
+
+def slides_pptx(slides: list[Slide], title: str = "Lecture slides", statements: list[Statement] | None = None) -> bytes:
+    """statements = every statement of the job (also the ones that are only in the speaker notes): the Sources slide lists the web sources of all of them."""
     prs = Presentation()
     first = prs.slides.add_slide(prs.slide_layouts[0])
     first.shapes.title.text = title
@@ -127,11 +139,15 @@ def slides_pptx(slides: list[Slide], title: str = "Lecture slides") -> bytes:
         if slide.example:
             p = body.add_paragraph()
             r = p.add_run()
-            r.text = f"Example: {' '.join(slide.example.split())}"
+            r.text = f"Example: {example_display(slide.example)}"
             r.font.size = Pt(size - 2)
             r.font.italic = True
         s.notes_slide.notes_text_frame.text = slide.speaker_notes
 
+    for statement in statements or []:
+        for src in statement.sources:
+            if src.type == "web":
+                web_sources.setdefault(src.url, src.title or src.url)
     items = list(web_sources.items())
     pages = [items[i : i + SOURCES_PER_SLIDE] for i in range(0, len(items), SOURCES_PER_SLIDE)] or [[]]
     for page_no, page in enumerate(pages, start=1):
@@ -191,7 +207,7 @@ def export_job(job_id: str, storage=None) -> dict[str, str]:
     data = {
         "txt": transcript_txt(_load_clean(job_id, storage)).encode("utf-8"),
         "md": notes_md(sections, statements, judged=judged).encode("utf-8"),
-        "pptx": slides_pptx(slides),
+        "pptx": slides_pptx(slides, statements=statements),
     }
     keys = {}
     for kind, content in data.items():

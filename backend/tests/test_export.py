@@ -124,3 +124,53 @@ def test_export_job_without_notes_final_warns_and_marks_the_md(tmp_path, capsys)
     export.export_job("job_x2", storage)
     assert capsys.readouterr().err == ""
     assert "NOT JUDGED" not in storage.load_bytes(keys["md"]).decode("utf-8")
+
+
+def _web_statement(i, section="sec_01"):
+    return Statement(id=f"st_w{i}", section_id=section, text="x",
+                     sources=[{"type": "web", "url": f"https://e.example/{i}", "title": f"Page {i}"}])
+
+
+def _sources_text(data):
+    return Presentation(io.BytesIO(data)).slides[-1].placeholders[1].text_frame.text
+
+
+def test_sources_slide_lists_web_sources_of_statements_that_are_only_in_the_notes():
+    """job_4423c587753f case: the web-only statements are not bullets (they are in the speaker notes)."""
+    shown = _web_statement(1)
+    hidden = _web_statement(2)
+    slides = [Slide(section_id="sec_01", title="T", bullets=[shown], speaker_notes="x [Source: web]")]
+    text = _sources_text(export.slides_pptx(slides, statements=[shown, hidden, _web_statement(1)]))
+    assert "Page 1" in text and "Page 2" in text
+    assert text.count("Page 1") == 1  # deduplicated by url
+    assert "No web sources" not in text
+
+
+def test_no_web_sources_sentence_only_when_the_whole_job_has_none():
+    lecture_only = Statement(id="st_1", section_id="sec_01", text="x", sources=[{"type": "lecture", "segment_id": "seg_1", "start": 0, "end": 1}])
+    slides = [Slide(section_id="sec_01", title="T", bullets=[lecture_only])]
+    assert "No web sources were used" in _sources_text(export.slides_pptx(slides, statements=[lecture_only]))
+    assert "No web sources were used" not in _sources_text(export.slides_pptx(slides, statements=[lecture_only, _web_statement(3)]))
+
+
+def test_example_label_is_not_doubled():
+    assert export.example_display("For example, a table has rows.") == "A table has rows."
+    assert export.example_display("for instance: the 2222 row.") == "The 2222 row."
+    assert export.example_display("  For  example,   x is 1. ") == "X is 1."
+    assert export.example_display("A table has rows.") == "A table has rows."
+    assert export.example_display("For examples we use tables.") == "For examples we use tables."  # only the lead-in phrase
+    slide = Slide(section_id="sec_01", title="T", bullets=[_web_statement(1)], example="For example, rows are tuples.")
+    text = Presentation(io.BytesIO(export.slides_pptx([slide]))).slides[1].placeholders[1].text_frame.text
+    assert "Example: Rows are tuples." in text and "For example" not in text
+
+
+def test_export_job_sources_slide_includes_notes_only_web_sources(tmp_path):
+    storage = LocalStorage(tmp_path)
+    for name, data in [("sections.json", [s.model_dump() for s in SECTIONS]),
+                       ("notes_final.json", [s.model_dump() for s in STATEMENTS] + [_web_statement(9).model_dump()]),
+                       ("slides.json", [s.model_dump() for s in SLIDES]),
+                       ("transcript_clean.json", [s.model_dump() for s in SEGMENTS])]:
+        save_json(job_key("job_x9", name), data, storage)
+    export.export_job("job_x9", storage)
+    pptx = storage.load_bytes(job_key("job_x9", "slides.pptx"))
+    assert "Page 9" in _sources_text(pptx)

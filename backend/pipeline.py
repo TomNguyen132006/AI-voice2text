@@ -121,10 +121,11 @@ def _judge_stage(job_id, storage, client):
     fix.fix_job(job_id, "notes.json", storage=storage, client=client)
 
 
-def _export_stage(job_id, storage, client):
+def _export_stage(job_id, storage, client, warnings):
     import export
     import slides
-    slides.slides_job(job_id, storage=storage, client=client, statements_file="notes_final.json")
+    result = slides.slides_job(job_id, storage=storage, client=client, statements_file="notes_final.json")
+    warnings.extend(result.report["warnings"])
     export.export_job(job_id, storage)
 
 
@@ -138,7 +139,7 @@ def run_pipeline(job_id: str, filename: str, storage=None, client=None, engine=N
         ("enriching", lambda: _enrich_stage(job_id, storage, client, provider, warnings)),
         ("writing", lambda: _write_stage(job_id, storage, client)),
         ("judging", lambda: _judge_stage(job_id, storage, client)),
-        ("exporting", lambda: _export_stage(job_id, storage, client)),
+        ("exporting", lambda: _export_stage(job_id, storage, client, warnings)),
     ]
     seconds: dict[str, float] = {}
     started = time.time()
