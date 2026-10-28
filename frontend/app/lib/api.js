@@ -9,10 +9,10 @@ export function checkFile(file) {
   const dot = file.name.lastIndexOf('.')
   const ext = dot === -1 ? '' : file.name.slice(dot).toLowerCase()
   if (!ALLOWED_EXTENSIONS.includes(ext)) {
-    return `"${ext || file.name}" is not supported. Use audio/video (${ALLOWED_EXTENSIONS.slice(0, 5).join(', ')}, ...) or a transcript (.txt, .srt, .vtt).`
+    return `We can't use "${ext || file.name}" files. Upload a transcript: .txt, .srt or .vtt.`
   }
-  if (file.size === 0) return 'The file is empty.'
-  if (file.size > MAX_UPLOAD_MB * 1024 * 1024) return `The file is larger than ${MAX_UPLOAD_MB} MB.`
+  if (file.size === 0) return 'That file is empty.'
+  if (file.size > MAX_UPLOAD_MB * 1024 * 1024) return `That file is larger than ${MAX_UPLOAD_MB} MB.`
   return null
 }
 
@@ -21,16 +21,19 @@ async function request(path, options) {
   try {
     res = await fetch(`${API_URL}${path}`, options)
   } catch {
-    throw new Error(`Cannot reach the backend at ${API_URL}.`)
+    const error = new Error('network')
+    error.kind = 'network'
+    throw error
   }
   if (!res.ok) {
-    let detail = `HTTP ${res.status}`
+    let detail = ''
     try {
       const body = await res.json()
       if (typeof body.detail === 'string') detail = body.detail
     } catch {}
-    const error = new Error(detail)
+    const error = new Error(`HTTP ${res.status}`)
     error.status = res.status
+    error.detail = detail
     throw error
   }
   return res.json()
@@ -44,7 +47,7 @@ export function createJob(file) {
 
 export const createSampleJob = () => request('/jobs/sample', { method: 'POST' })
 export const getStats = (id) => request(`/jobs/${encodeURIComponent(id)}/stats`, { cache: 'no-store' })
-export const getJob =(id) => request(`/jobs/${encodeURIComponent(id)}`, { cache: 'no-store' })
+export const getJob = (id) => request(`/jobs/${encodeURIComponent(id)}`, { cache: 'no-store' })
 
 // Download links: the backend returns paths like /jobs/{id}/files/notes.md
 export const fileUrl = (path) => `${API_URL}${path}`
@@ -58,4 +61,92 @@ export function clock(seconds) {
   const mm = String(m).padStart(2, '0')
   const ss = String(s).padStart(2, '0')
   return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`
+}
+
+// "4 min 8 s" for a duration in seconds.
+export function duration(seconds) {
+  const total = Math.round(seconds)
+  if (total < 60) return `${total} s`
+  const m = Math.floor(total / 60)
+  const s = total % 60
+  return s ? `${m} min ${s} s` : `${m} min`
+}
+
+// Only http(s) links are ever put in an href (a "javascript:" url must never become a link).
+export function safeHttpUrl(url) {
+  try {
+    const parsed = new URL(url)
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? parsed.href : null
+  } catch {
+    return null
+  }
+}
+
+export function domainOf(url) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '')
+  } catch {
+    return url
+  }
+}
+
+// The six stages the API reports (Job.stage), with a short title and what happens inside.
+export const STAGES = [
+  ['transcribing', 'Reading the file', 'Loading the transcript'],
+  ['cleaning', 'Cleaning', 'Fixing the transcript and splitting it by topic'],
+  ['enriching', 'Web search', 'Finding gaps in the lecture and searching the web for them'],
+  ['writing', 'Notes', 'Writing the notes, each with its sources'],
+  ['judging', 'Judge', 'Checking every note against its source and rewriting the ones that fail'],
+  ['exporting', 'Slides and files', 'Writing the slides and the files to download'],
+]
+const STAGE_TITLES = Object.fromEntries(STAGES.map(([key, title]) => [key, title]))
+
+// A server message is shown only when it is short plain text (never JSON or a stack trace).
+function plainText(text, max = 300) {
+  const clean = (text || '').replace(/\s+/g, ' ').trim()
+  if (!clean || clean.length > max || /^[{[]/.test(clean) || /traceback|\bat .+:\d+/i.test(clean)) return ''
+  return clean
+}
+
+// Turns a failed request into words for a person: { title, message }.
+export function describeError(error) {
+  const status = error?.status
+  const detail = plainText(error?.detail, 200)
+  if (error?.kind === 'network' || status === undefined) {
+    return {
+      title: "Can't reach the server",
+      message: 'It may be starting up (the free plan can take about 30 seconds) or you may be offline. Try again in a moment.',
+    }
+  }
+  if (status === 400) {
+    if (/transcribe audio|no gpu/i.test(error.detail || '')) {
+      return {
+        title: "This server can't transcribe audio",
+        message: 'It has no speech-to-text engine. Upload a transcript instead: a .txt, .srt or .vtt file.',
+      }
+    }
+    return { title: "We can't use that file", message: detail || 'Check that it is a .txt, .srt or .vtt transcript and that it is not empty.' }
+  }
+  if (status === 404) {
+    return { title: 'This job was not found', message: 'The server may have restarted and lost it. Upload the file again.' }
+  }
+  if (status === 409) return { title: 'Not ready yet', message: 'The job is still running. Wait a moment and try again.' }
+  if (status === 413) return { title: 'That file is too large', message: `Files can be up to ${MAX_UPLOAD_MB} MB.` }
+  if (status === 429) {
+    return { title: 'The server is busy', message: 'Too many requests, or the daily limit was reached. Wait a few minutes and try again.' }
+  }
+  if (status >= 500) return { title: 'The server had a problem', message: 'Try again in a minute. If it keeps happening, upload a smaller file.' }
+  return { title: 'Something went wrong', message: 'Please try again.' }
+}
+
+// A job that ended with status "error": its error text is "<stage>: <message>".
+export function describeJobFailure(job) {
+  const raw = job.error || ''
+  const match = raw.match(/^([a-z_]+):\s*([\s\S]*)$/)
+  const stage = match ? match[1] : job.stage
+  return {
+    title: `Stopped at: ${STAGE_TITLES[stage] || stage || 'an unknown step'}`,
+    message: 'Something went wrong while processing this lecture. Your file was not changed. Try again, or try a different file.',
+    detail: plainText(match ? match[2] : raw),
+  }
 }

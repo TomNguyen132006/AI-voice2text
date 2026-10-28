@@ -1,7 +1,8 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { createJob, createSampleJob, getJob } from '../lib/api'
+import { createJob, createSampleJob, describeError, describeJobFailure, getJob } from '../lib/api'
+import ErrorNotice from './ErrorNotice'
 import UploadBox from './UploadBox'
 import ProgressView from './ProgressView'
 import ResultsView from './ResultsView'
@@ -48,7 +49,7 @@ export default function LectureApp() {
       } catch (e) {
         failures.current += 1
         if (e.status === 404 || failures.current >= MAX_POLL_FAILURES) {
-          setError(e.status === 404 ? 'This job no longer exists on the server.' : e.message)
+          setError(describeError(e))
           setJob(null)
           remember(null)
         }
@@ -57,7 +58,9 @@ export default function LectureApp() {
     return () => clearInterval(timer)
   }, [jobId, finished])
 
+  const [lastAction, setLastAction] = useState(null) // what "Try again" repeats
   const start = useCallback(async (create) => {
+    setLastAction(() => create)
     setBusy(true)
     setError(null)
     failures.current = 0
@@ -66,7 +69,7 @@ export default function LectureApp() {
       remember(created.id)
       setJob(created)
     } catch (e) {
-      setError(e.message)
+      setError(describeError(e))
     } finally {
       setBusy(false)
     }
@@ -81,23 +84,14 @@ export default function LectureApp() {
   return (
     <div className="flex flex-col gap-6">
       {error && (
-        <p role="alert" className="rounded-lg border border-red-500/50 bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-300">
-          {error}
-        </p>
+        <ErrorNotice {...error} onRetry={lastAction ? () => start(lastAction) : reset} onSecondary={reset} secondaryLabel="Start over" />
       )}
       {!job && <UploadBox busy={busy} onFile={(file) => start(() => createJob(file))} onSample={() => start(createSampleJob)} />}
       {job && job.status !== 'done' && (
         <>
           <ProgressView job={job} />
           {job.status === 'error' && (
-            <div className="flex flex-col gap-3">
-              <p role="alert" className="rounded-lg border border-red-500/50 bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-300">
-                {job.error}
-              </p>
-              <button type="button" onClick={reset} className="self-start rounded-lg border border-zinc-400 px-4 py-2 text-sm font-medium dark:border-zinc-600">
-                Try another file
-              </button>
-            </div>
+            <ErrorNotice {...describeJobFailure(job)} onRetry={reset} />
           )}
         </>
       )}
