@@ -199,13 +199,14 @@ def test_notes_job_saves_files_and_numbers_statements_over_the_lecture(tmp_path)
 
 def test_web_only_statement_must_name_a_gap_term_of_its_section():
     r, _ = one(lambda k, n: reply(
-        note("Eigenvalues are stretch factors.", "web_1"),  # off topic: no gap term of sec_01 in the text
+        note("Eigenvalues are stretch factors.", "web_1"),  # off topic: the term of web_1 ("Hessian") is not in the text
         note("The Hessians are second derivatives.", "web_1"),  # plural of the term "Hessian": allowed
         note("Steepest descent is mentioned.", "web_1"),  # a term of ANOTHER section does not count
         note("Eigenvalues come from the lecture.", "seg_0001"),  # with a lecture source no gap term is needed
     ))
     assert [d.text for d in r.drafts] == ["The Hessians are second derivatives.", "Eigenvalues come from the lecture."]
-    assert [(d["n"], d["reason"]) for d in r.info["dropped"]] == [(1, "web_only_off_topic"), (3, "web_only_off_topic")]
+    # the web relevance guard (a web source needs its own search term in the text) drops these before web_only_off_topic can
+    assert [(d["n"], d["reason"]) for d in r.info["dropped"]] == [(1, "web_source_term_mismatch"), (3, "web_source_term_mismatch")]
     assert r.info["web_only"] == 1
 
 
@@ -213,7 +214,7 @@ def test_extra_sources_are_cut_separately_for_lecture_and_web(monkeypatch):
     # defaults: 6 lecture and 3 web sources; here the section has 2 segments and 2 web ids, so use small limits
     monkeypatch.setenv("NOTES_MAX_LECTURE_SOURCES", "1")
     monkeypatch.setenv("NOTES_MAX_WEB_SOURCES", "1")
-    r, _ = one(lambda k, n: reply(note("Many.", "web_1", "seg_0001", "web_2", "seg_0000")))
+    r, _ = one(lambda k, n: reply(note("Many Hessian facts.", "web_1", "seg_0001", "web_2", "seg_0000")))
     assert [getattr(s, "segment_id", None) or s.title for s in r.drafts[0].sources] == ["seg_0001", "Hessian matrix - Wiki"]
     assert r.info["dropped_sources"] == [
         {"n": 1, "source": "seg_0000", "reason": "over_max_lecture_sources"},
@@ -267,15 +268,15 @@ def test_n_generated_and_n_cut_by_cap_are_reported():
     assert "cap-cut" in notes.format_table(notes.NotesResult([], report))
 
 
-def test_web_only_check_happens_after_the_source_cut():
-    # three off-topic web ids stay web-only after the cut; one lecture id would make it lecture-backed
+def test_web_only_statement_with_off_topic_web_ids_is_dropped():
+    # no web id of "Nothing relevant." has its term in the text, so no source is left (a lecture id would have kept it)
     r, _ = one(lambda k, n: reply(note("Nothing relevant.", "web_1", "web_2")))
-    assert r.drafts == [] and r.info["dropped"][0]["reason"] == "web_only_off_topic"
+    assert r.drafts == [] and r.info["dropped"][0]["reason"] == "web_source_term_mismatch"
 
 
 def test_coverage_web_only_and_sources_per_statement_in_the_report():
     r, _ = one(lambda k, n: reply(
-        note("First.", "seg_0000", "web_1"), note("Second.", "seg_0000"), note("The Hessian from the web.", "web_2"),
+        note("First Hessian.", "seg_0000", "web_1"), note("Second.", "seg_0000"), note("The Hessian from the web.", "web_2"),
     ))
     assert r.info["cited_segments"] == 1 and r.info["coverage"] == 0.5  # seg_0000 of the 2 segments of sec_01
     assert r.info["web_only"] == 1 and r.info["sources_per_statement"] == [2, 1, 1]
@@ -289,3 +290,30 @@ def test_prompt_asks_for_coverage_without_a_number():
     assert "one note per IDEA" in prompt and "Skip remarks about what the lecturer plans" in prompt and "short review notes" not in prompt and "Do not skip a main idea because the section is long" in prompt
     import re
     assert not re.search(r"(\d+|at least|at most|exactly)\s+(statements|notes|sentences)", prompt)  # no target count
+
+
+def test_web_source_stays_only_when_its_search_term_is_in_the_statement():
+    r, _ = one(lambda k, n: reply(
+        note("Second derivatives are collected in the Hessian.", "seg_0000", "web_1"),  # term "Hessian" is in the text: kept
+        note("A different topic from the lecture.", "seg_0001", "web_1"),  # term not in the text: web source dropped, lecture kept
+    ))
+    assert [len(d.sources) for d in r.drafts] == [2, 1] and r.info["with_web_source"] == 1
+    assert r.info["dropped_sources"] == [{"n": 2, "source": "web_1", "reason": "web_source_term_mismatch"}]
+    assert r.info["dropped"] == []  # the statement itself is not dropped: it still has a lecture source
+
+
+def test_statement_left_without_any_source_is_dropped_as_web_source_term_mismatch():
+    r, _ = one(lambda k, n: reply(note("Unrelated claim.", "web_1"), note("Empty.", "web_9")))
+    assert r.drafts == []
+    assert [(d["n"], d["reason"]) for d in r.info["dropped"]] == [(1, "web_source_term_mismatch"), (2, "unsupported")]  # no web id at all: as before
+    assert {"n": 1, "source": "web_1", "reason": "web_source_term_mismatch"} in r.info["dropped_sources"]
+
+
+def test_guard_uses_the_term_of_the_web_id_and_multi_word_terms_in_order():
+    sec = SECS[1]  # sec_02: term "steepest descent", web_1 = its page
+    r, _ = one(lambda k, n: reply(
+        note("Steepest descents follow the negative gradient.", "seg_0002", "web_1"),  # plural and word forms: kept
+        note("The descent is steepest here.", "seg_0003", "web_1"),  # words in the wrong order: web dropped
+    ), section=sec)
+    assert [len(d.sources) for d in r.drafts] == [2, 1]
+    assert [d["reason"] for d in r.info["dropped_sources"]] == ["web_source_term_mismatch"]

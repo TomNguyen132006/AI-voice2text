@@ -9,7 +9,10 @@ Code does the rest, so the model never invents times or links:
 - Guards: an unknown id, or an id of another section, is dropped and reported; a statement with no
   valid source is dropped ("unsupported"); empty text is dropped; more than NOTES_MAX_PER_SECTION
   statements are cut and reported; a statement with ONLY web sources must name a gap term of its section
-  ("web_only_off_topic" otherwise; word forms match, see mentions_term); more than NOTES_MAX_LECTURE_SOURCES
+  ("web_only_off_topic" otherwise; word forms match, see mentions_term); a web source stays on a statement only when
+  the gap term it was searched for appears in the statement text (same word-form match; otherwise the source is
+  dropped as "web_source_term_mismatch", and a statement left with no source is dropped with that reason);
+  more than NOTES_MAX_LECTURE_SOURCES
   lecture sources or NOTES_MAX_WEB_SOURCES web sources per statement are cut. NOTES_MAX_PER_SECTION is only a
   safety net. The report also holds, per section, n_generated, n_cut_by_cap, the coverage (distinct cited
   segments / segments), the number of web-only statements and the sources per statement. A section whose call fails becomes an empty list with a flag, the
@@ -220,6 +223,12 @@ def notes_for_section(
             info["urls_removed"] += 1
         lecture, webs, bad = _resolve(item, own_ids, other_ids, web)
         info["dropped_sources"] += [{"n": n, **b} for b in bad]
+        # Web relevance guard: a web source stays only when the term it was searched for is in the statement text.
+        relevant = [(sid, w) for sid, w in webs if mentions_term(web[sid]["term"], text)]
+        for sid, _ in webs:
+            if all(sid != kept_sid for kept_sid, _ in relevant):
+                info["dropped_sources"].append({"n": n, "source": sid, "reason": "web_source_term_mismatch"})
+        mismatch, webs = len(webs) > len(relevant), relevant
         # Too many sources: the first ones (in the model's order) stay, the rest are reported.
         for sid in lecture[max_lecture:]:
             info["dropped_sources"].append({"n": n, "source": sid, "reason": "over_max_lecture_sources"})
@@ -228,7 +237,7 @@ def notes_for_section(
         lecture = lecture[:max_lecture]
         webs = [w for _, w in webs[:max_web]]
         if not lecture and not webs:
-            info["dropped"].append({"n": n, "text": shown, "reason": "unsupported"})
+            info["dropped"].append({"n": n, "text": shown, "reason": "web_source_term_mismatch" if mismatch else "unsupported"})
             continue
         if not lecture and not any(mentions_term(term, text) for term in section_terms):
             info["dropped"].append({"n": n, "text": shown, "reason": "web_only_off_topic"})
