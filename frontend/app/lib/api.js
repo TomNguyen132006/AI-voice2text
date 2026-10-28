@@ -3,7 +3,7 @@ export const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000
 
 // Same list as the backend (pipeline.ALLOWED_EXTENSIONS) and the same size limit (MAX_UPLOAD_MB).
 export const ALLOWED_EXTENSIONS = ['.mp3', '.m4a', '.wav', '.mp4', '.webm', '.flac', '.ogg', '.aac', '.mov', '.mkv', '.txt', '.srt', '.vtt']
-export const MAX_UPLOAD_MB = 500
+export const MAX_UPLOAD_MB = 10
 
 export function checkFile(file) {
   const dot = file.name.lastIndexOf('.')
@@ -131,9 +131,9 @@ export function describeError(error) {
     return { title: 'This job was not found', message: 'The server may have restarted and lost it. Upload the file again.' }
   }
   if (status === 409) return { title: 'Not ready yet', message: 'The job is still running. Wait a moment and try again.' }
-  if (status === 413) return { title: 'That file is too large', message: `Files can be up to ${MAX_UPLOAD_MB} MB.` }
+  if (status === 413) return { title: 'That file is too large', message: detail || `Files can be up to ${MAX_UPLOAD_MB} MB.` }
   if (status === 429) {
-    return { title: 'The server is busy', message: 'Too many requests, or the daily limit was reached. Wait a few minutes and try again.' }
+    return { title: 'The server is busy', message: detail || 'Too many requests, or the daily limit was reached. Wait a few minutes and try again.' }
   }
   if (status >= 500) return { title: 'The server had a problem', message: 'Try again in a minute. If it keeps happening, upload a smaller file.' }
   return { title: 'Something went wrong', message: 'Please try again.' }
