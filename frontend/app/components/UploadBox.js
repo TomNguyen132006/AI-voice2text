@@ -4,7 +4,7 @@ import { useRef, useState } from 'react'
 import { ALLOWED_EXTENSIONS, MAX_UPLOAD_MB, checkFile } from '../lib/api'
 
 // Start screen: pick a transcript (or the sample). Audio is still sent to the server, which answers 400 when it has no GPU.
-export default function UploadBox({ busy, fileName, onFile, onSample }) {
+export default function UploadBox({ busy, fileName, waking, notice, onFile, onSample }) {
   const input = useRef(null)
   const [dragging, setDragging] = useState(false)
   const [problem, setProblem] = useState(null)
@@ -52,11 +52,17 @@ export default function UploadBox({ busy, fileName, onFile, onSample }) {
           }}
         />
       </label>
+      {busy && waking && (
+        <p role="status" className="rounded-lg border border-accent/30 bg-accent-soft px-4 py-3 text-accent-ink">
+          The server is waking up. On the free plan the first request can take about 30 seconds.
+        </p>
+      )}
       {problem && (
         <p role="alert" className="rounded-lg border border-danger/40 bg-danger-soft px-4 py-3 text-danger">
           {problem}
         </p>
       )}
+      {notice}
       <ul className="list-disc space-y-1 pl-5 text-muted">
         <li>There is no length limit. In our test, a 4-minute lecture took about 4 minutes to process.</li>
         <li>Audio (.mp3, .wav, .mp4 and so on) is accepted only by a server with a GPU. If this one has none, you will be asked for a transcript.</li>
