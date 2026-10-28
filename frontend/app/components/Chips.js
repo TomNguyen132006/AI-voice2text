@@ -32,10 +32,10 @@ export function LectureChip({ source }) {
         onClick={() => setOpen((value) => !value)}
         aria-expanded={open}
         aria-label={`Lecture at ${clock(source.start)}, show details`}
-        className={`${chip} bg-accent-soft text-accent-ink hover:bg-accent/15`}
+        className={`${chip} bg-accent-soft text-accent-ink hover:bg-[#cdeae5]`}
       >
         <ClockIcon />
-        {clock(source.start)}
+        <span className="tabular-nums">{clock(source.start)}</span>
       </button>
       {open && (
         <span className="text-sm text-muted">
@@ -70,20 +70,18 @@ export function WebChip({ source }) {
 }
 
 const BADGES = {
-  verified: ['Source-checked', 'Checked by the judge against its sources.'],
-  rewritten: ['Rewritten', 'It failed the first check, was rewritten from its own sources, and passed the second check.'],
-  unjudged: ['Not judged', 'The judge gave no verdict for this note.'],
+  checked: ['source-checked', 'The judge checked this note against its cited sources and they support it.'],
+  rewritten: ['rewritten', 'It failed the first check, was rewritten from its own sources, and passed the second check.'],
+  unjudged: ['not judged', 'The judge gave no verdict for this note.'],
 }
 
 // The judge's verdict for one note (shown only when the stats say so).
 export function JudgeBadge({ kind }) {
   const [text, explain] = BADGES[kind]
   return (
-    <span title={explain} className="inline-flex items-center gap-1 text-sm text-muted">
-      <span aria-hidden className={kind === 'verified' ? 'text-accent' : ''}>
-        {kind === 'verified' ? '✓' : kind === 'rewritten' ? '↻' : '○'}
-      </span>
-      {text}
+    <span title={explain} className="inline-flex items-center gap-1.5 text-sm font-medium text-muted">
+      <span aria-hidden className={`inline-block h-2 w-2 rounded-full ${kind === 'checked' ? 'bg-teal' : kind === 'rewritten' ? 'border-2 border-teal' : 'border-2 border-line-strong'}`} />
+      <span className={kind === 'unjudged' ? '' : 'text-accent-ink'}>{text}</span>
       <span className="sr-only">. {explain}</span>
     </span>
   )

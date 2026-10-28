@@ -14,7 +14,7 @@ function judgeKinds(stats, statements) {
   const kinds = {}
   for (const s of statements) {
     const verdict = rejected[s.id]
-    kinds[s.id] = !verdict ? 'verified' : verdict === 'unjudged' ? 'unjudged' : 'rewritten'
+    kinds[s.id] = !verdict ? 'checked' : verdict === 'unjudged' ? 'unjudged' : 'rewritten'
   }
   return kinds
 }
@@ -22,7 +22,7 @@ function judgeKinds(stats, statements) {
 function Figure({ value, label }) {
   return (
     <div className="flex flex-col">
-      <dd className="font-read text-2xl font-semibold tabular-nums">{value}</dd>
+      <dd className="font-read text-2xl font-bold tabular-nums text-navy">{value}</dd>
       <dt className="text-muted">{label}</dt>
     </div>
   )
@@ -36,20 +36,20 @@ function Summary({ job, sectionCount }) {
         <p className="rounded-lg border border-accent/30 bg-accent-soft px-4 py-3 text-accent-ink">
           This is <strong>sample data</strong>, written by hand to show the layout. A model did not write it.
         </p>
-        <dl className="grid grid-cols-2 gap-4">
+        <dl className="grid grid-cols-2 gap-4 rounded-xl border border-line bg-surface px-5 py-4">
           <Figure value={sectionCount} label="sections" />
           <Figure value={statements.length} label="notes" />
         </dl>
       </div>
     )
   }
-  const verified = summary.kept === undefined ? null : summary.kept - (summary.kept_unjudged || 0)
+  const checked = summary.kept === undefined ? null : summary.kept - (summary.kept_unjudged || 0)
   return (
     <div className="flex flex-col gap-3">
-      <dl className="grid grid-cols-2 gap-x-4 gap-y-4 sm:grid-cols-3 lg:grid-cols-6">
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-5 rounded-xl border border-line bg-surface px-5 py-4 sm:grid-cols-3 lg:grid-cols-6">
         <Figure value={sectionCount} label="sections" />
         <Figure value={statements.length} label="notes" />
-        {verified !== null && <Figure value={verified} label="source-checked by the judge" />}
+        {checked !== null && <Figure value={checked} label="source-checked by the judge" />}
         {typeof summary.fixed === 'number' && <Figure value={summary.fixed} label="rewritten" />}
         {typeof summary.total_seconds === 'number' && <Figure value={duration(summary.total_seconds)} label="processing time" />}
         {typeof summary.est_cost_usd === 'number' && <Figure value={`$${summary.est_cost_usd.toFixed(3)}`} label="model cost" />}
@@ -67,20 +67,25 @@ function Summary({ job, sectionCount }) {
   )
 }
 
+function DownloadIcon() {
+  return (
+    <svg aria-hidden viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M8 2.5v8m0 0L5 7.5m3 3l3-3M3 13h10" />
+    </svg>
+  )
+}
+
 function DownloadButton({ label, path, primary }) {
-  const base = 'inline-flex w-full items-center justify-center rounded-lg px-5 py-2.5 font-medium sm:w-auto'
   if (!path) {
     return (
-      <span aria-disabled="true" className={`${base} border border-line text-muted`}>
+      <span aria-disabled="true" className="btn btn-secondary w-full sm:w-auto">
         {label} (not available)
       </span>
     )
   }
   return (
-    <a
-      href={fileUrl(path)}
-      className={`${base} ${primary ? 'bg-accent text-white hover:bg-accent-ink' : 'border border-accent text-accent hover:bg-accent-soft'}`}
-    >
+    <a href={fileUrl(path)} className={`btn w-full sm:w-auto ${primary ? 'btn-primary' : 'btn-secondary'}`}>
+      <DownloadIcon />
       {label}
     </a>
   )
@@ -107,49 +112,48 @@ export default function ResultsView({ job, onReset }) {
     <div className="flex flex-col gap-10">
       <section aria-labelledby="result-heading" className="flex flex-col gap-6">
         <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-          <h2 id="result-heading" className="font-read text-3xl font-semibold">
+          <h2 id="result-heading" className="text-3xl font-bold">
             Your study notes
           </h2>
-          <button type="button" onClick={onReset} className="font-medium text-accent underline underline-offset-2">
+          <button type="button" onClick={onReset} className="font-semibold text-accent underline underline-offset-2 hover:text-accent-hover">
             New lecture
           </button>
         </div>
         <Summary job={job} sectionCount={groups.length} />
-        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-          <a
-            href={zipUrl(job.id)}
-            className="inline-flex w-full items-center justify-center rounded-lg bg-accent px-5 py-2.5 font-medium text-white hover:bg-accent-ink sm:w-auto"
-          >
-            All files (.zip)
-          </a>
-          <DownloadButton label="Notes (.md)" path={job.outputs.md} />
-          <DownloadButton label="Slides (.pptx)" path={job.outputs.pptx} />
-          <DownloadButton label="Transcript (.txt)" path={job.outputs.txt} />
+        <div>
+          <h3 className="sr-only">Downloads</h3>
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+            <a href={zipUrl(job.id)} className="btn btn-primary w-full sm:w-auto">
+              <DownloadIcon />
+              All files (.zip)
+            </a>
+            <DownloadButton label="Notes (.md)" path={job.outputs.md} />
+            <DownloadButton label="Slides (.pptx)" path={job.outputs.pptx} />
+            <DownloadButton label="Transcript (.txt)" path={job.outputs.txt} />
+          </div>
         </div>
       </section>
 
       {groups.length === 0 && (
-        <p className="rounded-lg border border-line bg-surface px-4 py-4">
-          No note passed the checks, so there is nothing to show. Try a different transcript.
-        </p>
+        <p className="rounded-xl border border-line bg-surface px-5 py-5">No note passed the checks, so there is nothing to show. Try a different transcript.</p>
       )}
 
       {groups.map(({ section, notes }) => (
-        <section key={section.id} aria-labelledby={`h-${section.id}`} className="flex flex-col gap-5 border-t border-line pt-8">
-          <header>
-            <h3 id={`h-${section.id}`} className="font-read text-2xl font-semibold">
+        <section key={section.id} aria-labelledby={`h-${section.id}`} className="flex flex-col gap-5 border-t-2 border-teal/40 pt-7">
+          <header className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+            <h3 id={`h-${section.id}`} className="min-w-0 flex-1 text-2xl font-bold">
               {section.title}
             </h3>
             {section.end > 0 && (
-              <p className="text-muted">
-                Lecture time {clock(section.start)} – {clock(section.end)}
+              <p className="inline-flex shrink-0 items-center rounded-full bg-accent-soft px-3 py-1 text-sm font-semibold text-accent-ink tabular-nums">
+                {clock(section.start)} – {clock(section.end)}
               </p>
             )}
           </header>
           <ul className="flex flex-col gap-7">
             {notes.map((note) => (
-              <li key={note.id} className="flex flex-col gap-2">
-                <p className="font-read text-lg leading-relaxed">{note.text}</p>
+              <li key={note.id} className="flex flex-col gap-2.5">
+                <p className="font-read text-lg leading-relaxed text-ink">{note.text}</p>
                 <div className="flex flex-wrap items-center gap-2">
                   {note.sources.map((source, i) =>
                     source.type === 'web' ? <WebChip key={`${note.id}-${i}`} source={source} /> : <LectureChip key={`${note.id}-${i}`} source={source} />,
