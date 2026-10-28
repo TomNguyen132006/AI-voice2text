@@ -24,7 +24,7 @@ local backend, Oct 28), ran with the new slide rule and the new limits code: 415
 | 1 Transcription | Parakeet, transcript upload | PROVEN LIVE (local GPU only) | Parakeet ran on a local RTX 4060 (Oct 8, see "Parakeet local test environment"); not re-run on Oct 27. `.srt` import checked on one job: 36 cues, times and text identical to the source. The 60-minute audio test (S1-2) is NOT TESTED. |
 | 2 Model layer, cleaning, topic split | `llm.py`, `clean.py`, `topics.py` | PROVEN LIVE | Two real jobs. One Nano cleaning call was cut off at 20000 tokens and retried (118 s). |
 | 3 Enrichment | gap finder, web search | PROVEN LIVE | 9 Tavily searches, 0 errors. The 429/5xx paths are ONLY MOCKS. |
-| 4 Notes and slides | `notes.py`, `slides.py`, `check_sources.py` | PROVEN LIVE | Three real jobs. Slides (rule since Oct 28): the bullets are all statements of the section except the example, in lecture order, at most 5; the rest goes to speaker notes. The model only chooses the title and the example id. It ran live once on this rule (`job_4423c587753f`: 2 slides, 5 bullets and an example each, `check_sources` all passed). |
+| 4 Notes and slides | `notes.py`, `slides.py`, `check_sources.py` | PROVEN LIVE | Three real jobs. Slides (rule since Oct 28): the bullets are all statements of the section except the example, in lecture order, at most 7 and at most 700 characters of text; the rest goes to speaker notes, each with its sources. The model only chooses the title and the example id. It ran live once on this rule (`job_4423c587753f`: 2 slides, 5 bullets and an example each, `check_sources` all passed). |
 | 5 Judge | `judge.py`, `fix.py` | PROVEN LIVE (one run) | Ultra judged 57 statements in three jobs (48 pass, 9 unsupported). One unsupported statement was rewritten once and passed; in the Oct 28 job all 5 unsupported statements were rewritten once, passed the second check and were kept (0 dropped). Code checks (`no_source`, `bad_source`, `unknown_url`) and the drop paths are ONLY MOCKS. The judge has no "weakly supported / speech recognition difference" level. |
 | 6 Output files | `.txt`, `.md`, `.pptx`, `.zip` | PROVEN LIVE (`.txt`, `.md`); NOT TESTED (`.pptx` in PowerPoint and Google Slides) | The `.pptx` was only read back with python-pptx. |
 | 7 Frontend and Job API | pipeline, `/jobs` API, Next.js page | PROVEN LIVE (pipeline and API, local); NOT TESTED (page in a browser, Job API on Render) | Every endpoint answered as expected on a local backend. `npm run build` and `eslint` pass. |
@@ -34,6 +34,8 @@ local backend, Oct 28), ran with the new slide rule and the new limits code: 415
 **Known limits**
 - Audio works only on a local GPU machine (Parakeet needs NeMo and an NVIDIA GPU). The deployed backend has no GPU engine and accepts transcripts only (`.txt`, `.srt`, `.vtt`).
 - The judge evidence is three jobs (57 statements), no repeat of the same job, and no comparison with a human check beyond reading 5 statements of the Oct 28 job against their segments and snippets (all 5 supported).
+- **The judge accepts a few details beyond a snippet or segment.** Examples from reading statements (Oct 28): "a sequence of operations treated as a single unit" where the snippet only says that all operations complete or none do; "(family members covered by benefits)" added after "dependents" where neither the segment nor the snippet says it. The judge also let a vague rewrite through once ("there was a problem that was not easy to do"); the fixer prompt now allows dropping such a statement.
+- **One-run evidence.** The numbers of the Oct 28 prompt changes come from one rerun of one lecture (`job_125c_rerun`, a copy of the 6.4-minute Introduction job); nothing was repeated and no human compared the results.
 - **Speech recognition errors pass through the judge.** Parakeet can write a wrong word (for example "row or tuple" written as "raw or topel"; this reached a slide in the Oct 28 job). The judge compares each statement with the transcript, not with the audio, so it cannot see the error. The timestamp on every statement lets a person re-listen.
 - Jobs and files are lost when the Render instance restarts or sleeps, unless S3 storage is configured (not tested).
 - Render free tier cold start: about 33 s for the first request after sleep.
@@ -66,6 +68,15 @@ from that JSON by a throw-away script and uploaded as `.srt`. Measured on the RT
 
 A slot is reserved before the upload is read and given back if the job never started (bad type, empty or too large file, transcript too long, storage error), so only queued jobs use up the day.
 A job that was queued and fails later in the pipeline stays counted. `POST /jobs/sample` calls no model and no search, so it is not counted. For scale: the four test lectures (4.4 to 7 minutes) have 3,195 to 5,385 characters.
+**Quality limits** (code defaults; each can be overridden by the environment variable of the same name, see `.env.example`):
+
+| Variable | Default | What it limits |
+|---|---|---|
+| `GAPS_MAX_PER_SECTION` | 3 (was 5) | terms per section that are sent to web search |
+| `NOTES_MAX_WEB_ONLY_PER_SECTION` | 2 | statements per section whose sources are all web results; extra ones are dropped by code (`web_only_cap` in `notes_report.json`), the ones whose term is used most in the section's lecture text stay |
+| `SNIPPET_MAX_CHARS` | 1000 (notes writer was 600) | length of a web snippet in the prompt; the notes writer and the judge use the same value |
+| `SLIDE_MAX_BULLETS` / `SLIDE_MAX_BULLET_CHARS` | 7 / 700 | bullets per slide / text on a slide |
+
 A missing key is reported by name: `NEBIUS_API_KEY is not set ...` (models) or `TAVILY_API_KEY is not set` (web search, which only becomes a warning).
 
 ## Repo structure
@@ -407,7 +418,7 @@ times and merges sections shorter than 60 s into a neighbour.
 ## Gap finder (S3-1)
 
 `backend/gaps.py`: for each section, Super gets the title and only that section's cleaned segments and
-returns `[{section_id, term, reason}]` (at most `GAPS_MAX_PER_SECTION` = 5, plain dicts, no schema change).
+returns `[{section_id, term, reason}]` (at most `GAPS_MAX_PER_SECTION` = 3 since Oct 28, before 5; plain dicts, no schema change).
 Code checks every item: `section_id` must be the section asked, every word of `term` must occur in that
 section's text, duplicates and items over the maximum are dropped. Invalid JSON or a cut-off answer is
 retried once (cut-off with double `max_tokens`, start 16000), then the section gets an empty list and is
@@ -550,7 +561,7 @@ the long one). Checked afterwards: a statement in sec_03 calls the level set 2x+
 `python -m slides <job_id>` (from `backend/`) builds one `schemas.Slide` per section FROM the validated statements in `notes.json`, and writes
 `slides.json` and `slides_report.json`. Super sees the section title and that section's statements as `[{id, text}]` (no sources, no urls) and
 returns `{"title", "example": id|null}` (since Oct 28; before, it also chose the bullet ids). **The model writes no claim and does not pick the bullets.** Code does the rest:
-- `bullets` = copies of ALL statements of the section except the example, text and sources unchanged (a test checks this), in lecture order (by the first lecture time of each statement; web-only statements last), at most `SLIDE_MAX_BULLETS`.
+- `bullets` = copies of ALL statements of the section except the example, text and sources unchanged (a test checks this), in lecture order (by the first lecture time of each statement; web-only statements last), at most `SLIDE_MAX_BULLETS` (7) and `SLIDE_MAX_BULLET_CHARS` (700, bullets plus example): the first statement that does not fit and every later one go to the speaker notes.
 - `example` = the text of the chosen example statement (its id must be one of the section's statements). It is not a bullet, so nothing is printed twice, and it does not count against the bullet limit.
   **Trade-off:** `Slide.example` is a plain string without sources, so code writes the sources of the example into the speaker notes
   ("Source of the example: lecture 00:42-00:49 (seg_0006); web: <title> <url>"). The Slide object itself therefore carries no structured sources for the
@@ -559,7 +570,8 @@ returns `{"title", "example": id|null}` (since Oct 28; before, it also chose the
 - `speaker_notes` = built by code only: the texts of the statements that are not shown, the source line of the example, and the lecture time range of
   the section for re-listening. The model writes no free speaker notes, so there are no unsourced "non-claim" notes.
 - `title` = the model's short label for the topic (not a claim). If it is empty or longer than `SLIDE_MAX_TITLE_WORDS` the section title is used.
-- Limits in `slides_config.py`, enforced by code, not in the prompt: `SLIDE_MAX_BULLETS` (5), `SLIDE_MAX_WORDS_PER_BULLET` (30; a longer statement
+- Speaker notes: every statement that is not a bullet is printed with its sources (`[Source: lecture 01:10-01:16 (seg_0009); web: <title> <url>]`); a statement without sources is never printed there. The Sources slide of the `.pptx` lists the web sources of ALL statements of the job (deduplicated), also those that are only in the speaker notes; "No web sources were used" appears only when the job has none. The example box reads "Example: ..." and a leading "For example," / "For instance," is removed for display only. If a slide title promises a list ("Types", "Kinds", "Properties" ...) and statements went to the notes, `slides_report.json` and `pipeline_report.json` get a warning naming them; nothing is guessed.
+- Limits in `slides_config.py`, enforced by code, not in the prompt: `SLIDE_MAX_BULLETS` (7), `SLIDE_MAX_BULLET_CHARS` (700), `SLIDE_MAX_WORDS_PER_BULLET` (30; a longer statement
   is not shown as a bullet because shortening it would rewrite it). Cut and too-long statements move to the speaker notes, nothing is lost.
 - Guards, each listed in `slides_report.json`: an unknown or foreign example id is dropped; no bullets -> flagged, no slide; a failed section is flagged and the others go on.
 
@@ -599,7 +611,7 @@ Run: `python -m fix <job_id> [statements_file]` (from `backend/`; it reuses `jud
 | `no_source`, `bad_source`, `unknown_url` | dropped (the source is the problem, a new text cannot help) |
 | `unjudged` | kept and marked `kept_unjudged` (the judge failed, not the statement) |
 
-If Super fails, answers with an empty text or returns the same text, the statement is dropped (`fixer_failed`, `fixer_gave_up`, `fixer_no_change`).
+If Super fails, answers with an empty text or returns the same text, the statement is dropped (`fixer_failed`, `fixer_gave_up`, `fixer_no_change`). Since Oct 28 the fixer prompt tells Super to answer with an empty text when what is left after removing the unsupported part teaches nothing; `judge_report.json` `final.n_dropped_empty` counts these (`fixer_gave_up`). Since Oct 28 the judge prompt also asks, for a statement whose sources are all web results, whether the web text keeps the meaning the lecture gives to the same term; if not it answers `contradicts`.
 Files: `notes_final.json` (survivors, original ids), `fix_log.json` (old text, new text, both verdicts and reasons, outcome) and `judge_report.json`, which now also holds `fix` (second round) and `final`: kept / passed first time / fixed / kept unjudged / dropped by reason, total calls and cost over all rounds. These are the numbers for the Devpost write-up.
 
 **Status:** `judge.py` and `fix.py` have unit tests with a fake client and ran live in three jobs (Oct 22-28): 57 statements, 48 pass first time, 9 unsupported. In the Oct 28 job all 5 unsupported statements were rewritten once by Super and kept after the second check (judge cost $0.0321 of $0.0588). **Not proven:** false rejects, the code checks and drop paths with real output, and anything beyond three jobs. Not done: judging the slides, and wiring `notes_final.json` into the exports.
