@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useReducer, useState, useSyncExternalStore } from 'react'
 import { createJob, createSampleJob, describeError, describeJobFailure, getJob } from '../lib/api'
 import { useAfter } from '../lib/hooks'
+import { jobReducer as reducer } from '../lib/jobReducer'
+import { addRecent } from '../lib/recent'
 import ErrorNotice from './ErrorNotice'
 import ProgressView from './ProgressView'
 import ResultsView from './ResultsView'
@@ -29,23 +31,6 @@ function readSaved() {
   }
 }
 const noSubscription = () => () => {}
-
-// job: the last answer of GET /jobs/{id}. log: when this browser saw each stage begin and end (ms),
-// because the API only says which stage is current.
-function reducer(state, action) {
-  if (action.type === 'reset') return { job: null, log: {} }
-  const { job, at } = action
-  const log = job.id === state.job?.id ? { ...state.log } : {}
-  const before = state.job?.id === job.id ? state.job.stage : null
-  if (job.stage !== before) {
-    if (before && log[before] && !log[before].end) log[before] = { ...log[before], end: at }
-    if (job.status === 'running' || job.status === 'queued') log[job.stage] = { start: at }
-  }
-  if (job.status === 'done' || job.status === 'error') {
-    for (const key of Object.keys(log)) if (!log[key].end) log[key] = { ...log[key], end: at }
-  }
-  return { job, log }
-}
 
 function Loading() {
   return (
@@ -137,6 +122,7 @@ export default function LectureApp() {
     try {
       const created = await create()
       remember(created.id)
+      addRecent({ id: created.id, name: name || 'Sample (hand-written)' })
       dispatch({ type: 'job', job: created, at: Date.now() })
     } catch (e) {
       setError(describeError(e))

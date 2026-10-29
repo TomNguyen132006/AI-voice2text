@@ -78,7 +78,7 @@ function DownloadIcon() {
   )
 }
 
-function DownloadButton({ label, path }) {
+function DownloadButton({ label, path, example, filename }) {
   if (!path) {
     return (
       <span aria-disabled="true" className="story-button story-button-outline story-button-small w-full sm:w-auto">
@@ -87,16 +87,22 @@ function DownloadButton({ label, path }) {
     )
   }
   return (
-    <a href={fileUrl(path)} className="story-button story-button-outline story-button-small w-full sm:w-auto">
+    <a
+      href={example ? path : fileUrl(path)}
+      download={example ? `lecturesque-${filename}` : undefined}
+      className="story-button story-button-outline story-button-small w-full sm:w-auto"
+    >
       <DownloadIcon />
       {label}
     </a>
   )
 }
 
-export default function ResultsView({ job, onReset }) {
-  const [stats, setStats] = useState(undefined) // undefined: loading, null: none
+// example: a pre-generated example (frontend/public/examples), opened without the backend: static files, no stats request.
+export default function ResultsView({ job, onReset, example }) {
+  const [stats, setStats] = useState(example ? null : undefined) // undefined: loading, null: none
   useEffect(() => {
+    if (example) return
     let cancelled = false
     getStats(job.id)
       .then((value) => !cancelled && setStats(value))
@@ -104,7 +110,7 @@ export default function ResultsView({ job, onReset }) {
     return () => {
       cancelled = true
     }
-  }, [job.id])
+  }, [job.id, example])
 
   const kinds = useMemo(() => judgeKinds(stats, job.statements), [stats, job.statements])
   const groups = (job.sections.length ? job.sections : [{ id: 'all', title: 'Notes', start: 0, end: 0 }])
@@ -125,17 +131,27 @@ export default function ResultsView({ job, onReset }) {
             </button>
           </div>
         </div>
+        {example && (
+          <div role="note" className="flex flex-col gap-1 rounded-2xl bg-accent px-4 py-3 text-accent-foreground">
+            <p className="font-semibold">This is a pre-generated example, not a live run.</p>
+            <p>{example.credit}</p>
+          </div>
+        )}
         <Summary job={job} sectionCount={groups.length} />
         <div>
           <h3 className="sr-only">Downloads</h3>
           <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-            <a href={zipUrl(job.id)} className="story-button story-button-coral w-full sm:w-auto">
+            <a
+              href={example ? `${example.files}/all.zip` : zipUrl(job.id)}
+              download={example ? 'lecturesque-all.zip' : undefined}
+              className="story-button story-button-coral w-full sm:w-auto"
+            >
               <DownloadIcon />
               All files (.zip)
             </a>
-            <DownloadButton label="Notes (.md)" path={job.outputs.md} />
-            <DownloadButton label="Slides (.pptx)" path={job.outputs.pptx} />
-            <DownloadButton label="Transcript (.txt)" path={job.outputs.txt} />
+            <DownloadButton label="Notes (.md)" path={job.outputs.md} example={Boolean(example)} filename="notes.md" />
+            <DownloadButton label="Slides (.pptx)" path={job.outputs.pptx} example={Boolean(example)} filename="slides.pptx" />
+            <DownloadButton label="Transcript (.txt)" path={job.outputs.txt} example={Boolean(example)} filename="transcript.txt" />
           </div>
         </div>
       </section>

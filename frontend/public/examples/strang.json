@@ -1,0 +1,617 @@
+{
+ "id": "example-strang",
+ "status": "done",
+ "stage": "done",
+ "error": null,
+ "outputs": {
+  "txt": "/examples/strang/transcript.txt",
+  "md": "/examples/strang/notes.md",
+  "pptx": "/examples/strang/slides.pptx"
+ },
+ "updated_at": 0,
+ "statements": [
+  {
+   "id": "st_0001",
+   "section_id": "sec_01",
+   "text": "A pure quadratic is a quadratic function of the form f(x)=ax^2+bx+c with a≠0, whose graph is a parabola.",
+   "sources": [
+    {
+     "type": "web",
+     "url": "https://www.varsitytutors.com/practice/subjects/ap-physics-1/lessons/quadratic-models-and-optimization-max-min",
+     "title": "Quadratic Models and Optimization (Max/Min) | Varsity Tutors"
+    }
+   ]
+  },
+  {
+   "id": "st_0002",
+   "section_id": "sec_01",
+   "text": "The function is a pure quadratic in two variables, x and y.",
+   "sources": [
+    {
+     "type": "lecture",
+     "segment_id": "seg_0003",
+     "start": 19.12,
+     "end": 21.92
+    },
+    {
+     "type": "lecture",
+     "segment_id": "seg_0004",
+     "start": 22.4,
+     "end": 27.2
+    }
+   ]
+  },
+  {
+   "id": "st_0003",
+   "section_id": "sec_01",
+   "text": "Any pure quadratic in two variables can be written as x^T S x where S is a symmetric 2×2 matrix.",
+   "sources": [
+    {
+     "type": "lecture",
+     "segment_id": "seg_0005",
+     "start": 27.44,
+     "end": 42.48
+    }
+   ]
+  },
+  {
+   "id": "st_0004",
+   "section_id": "sec_01",
+   "text": "In this example, S is diagonal and its eigenvalues are 1 and b.",
+   "sources": [
+    {
+     "type": "lecture",
+     "segment_id": "seg_0006",
+     "start": 42.96,
+     "end": 49.52
+    }
+   ]
+  },
+  {
+   "id": "st_0005",
+   "section_id": "sec_01",
+   "text": "Here b represents the smaller eigenvalue of S.",
+   "sources": [
+    {
+     "type": "lecture",
+     "segment_id": "seg_0007",
+     "start": 49.68,
+     "end": 52.72
+    }
+   ]
+  },
+  {
+   "id": "st_0006",
+   "section_id": "sec_01",
+   "text": "For a symmetric positive matrix, the condition number is the ratio of its largest to smallest eigenvalue.",
+   "sources": [
+    {
+     "type": "web",
+     "url": "https://www.math.cmu.edu/~shlomo/VKI-Lectures/lecture1/node5.html",
+     "title": "Condition Number of the Hessian"
+    }
+   ]
+  },
+  {
+   "id": "st_0007",
+   "section_id": "sec_01",
+   "text": "The condition number of S is λ_max/λ_min = 1/b.",
+   "sources": [
+    {
+     "type": "lecture",
+     "segment_id": "seg_0008",
+     "start": 53.28,
+     "end": 70.08
+    },
+    {
+     "type": "lecture",
+     "segment_id": "seg_0009",
+     "start": 70.32,
+     "end": 76.0
+    }
+   ]
+  },
+  {
+   "id": "st_0008",
+   "section_id": "sec_01",
+   "text": "When b is very small, 1/b is large, indicating a high condition number and slow convergence.",
+   "sources": [
+    {
+     "type": "lecture",
+     "segment_id": "seg_0010",
+     "start": 76.4,
+     "end": 84.72
+    }
+   ]
+  },
+  {
+   "id": "st_0009",
+   "section_id": "sec_01",
+   "text": "An eigenvalue is the factor by which an eigenvector is stretched or compressed during a linear transformation.",
+   "sources": [
+    {
+     "type": "web",
+     "url": "https://en.wikipedia.org/wiki/Eigenvalues_and_eigenvectors",
+     "title": "Eigenvalues and eigenvectors - Wikipedia"
+    }
+   ]
+  },
+  {
+   "id": "st_0010",
+   "section_id": "sec_01",
+   "text": "Gradient descent is a first‑order iterative algorithm that uses the gradient to minimize a differentiable function.",
+   "sources": [
+    {
+     "type": "web",
+     "url": "https://en.wikipedia.org/wiki/Gradient_descent",
+     "title": "Gradient descent - Wikipedia"
+    }
+   ]
+  },
+  {
+   "id": "st_0011",
+   "section_id": "sec_02",
+   "text": "We can take explicit steps of the steepest descent algorithm.",
+   "sources": [
+    {
+     "type": "lecture",
+     "segment_id": "seg_0015",
+     "start": 105.28,
+     "end": 114.72
+    }
+   ]
+  },
+  {
+   "id": "st_0012",
+   "section_id": "sec_02",
+   "text": "At each iteration we can write down the update produced by steepest descent and monitor how fast it approaches the solution.",
+   "sources": [
+    {
+     "type": "lecture",
+     "segment_id": "seg_0016",
+     "start": 115.59,
+     "end": 122.47
+    }
+   ]
+  },
+  {
+   "id": "st_0013",
+   "section_id": "sec_02",
+   "text": "The example function is a bowl centered at the origin, so its minimum is at x* = (0,0).",
+   "sources": [
+    {
+     "type": "lecture",
+     "segment_id": "seg_0019",
+     "start": 128.47,
+     "end": 131.59
+    },
+    {
+     "type": "lecture",
+     "segment_id": "seg_0020",
+     "start": 131.91,
+     "end": 136.15
+    }
+   ]
+  },
+  {
+   "id": "st_0014",
+   "section_id": "sec_02",
+   "text": "The key question is how many iterations are needed for steepest descent to reach the optimum.",
+   "sources": [
+    {
+     "type": "lecture",
+     "segment_id": "seg_0022",
+     "start": 143.03,
+     "end": 146.55
+    }
+   ]
+  },
+  {
+   "id": "st_0015",
+   "section_id": "sec_02",
+   "text": "Even though this is a simple, non‑typical example, it reveals the full behavior of the steepest descent method.",
+   "sources": [
+    {
+     "type": "lecture",
+     "segment_id": "seg_0023",
+     "start": 146.71,
+     "end": 155.99
+    }
+   ]
+  },
+  {
+   "id": "st_0016",
+   "section_id": "sec_02",
+   "text": "By running the algorithm we can view the exact sequence of points generated by steepest descent.",
+   "sources": [
+    {
+     "type": "lecture",
+     "segment_id": "seg_0024",
+     "start": 156.15,
+     "end": 160.39
+    }
+   ]
+  },
+  {
+   "id": "st_0017",
+   "section_id": "sec_02",
+   "text": "We can track how fast the iterates approach x* and consider strategies to accelerate convergence when it is sluggish.",
+   "sources": [
+    {
+     "type": "lecture",
+     "segment_id": "seg_0025",
+     "start": 160.55,
+     "end": 177.83
+    }
+   ]
+  },
+  {
+   "id": "st_0018",
+   "section_id": "sec_02",
+   "text": "Steepest descent is an iterative optimization method that moves from the current point in the direction of the negative gradient.",
+   "sources": [
+    {
+     "type": "web",
+     "url": "http://katselis.web.engr.illinois.edu/ECE586/Lecture3.pdf",
+     "title": "Lecture 3: Steepest and Gradient Descent-Part I"
+    }
+   ]
+  },
+  {
+   "id": "st_0019",
+   "section_id": "sec_03",
+   "text": "The gradient of the linear function f(x,y)=2x+5y is the constant vector (2,5).",
+   "sources": [
+    {
+     "type": "lecture",
+     "segment_id": "seg_0034",
+     "start": 233.83,
+     "end": 238.87
+    },
+    {
+     "type": "lecture",
+     "segment_id": "seg_0035",
+     "start": 239.46,
+     "end": 250.34
+    }
+   ]
+  },
+  {
+   "id": "st_0020",
+   "section_id": "sec_03",
+   "text": "Because the gradient is constant, it is the same at every point (x,y).",
+   "sources": [
+    {
+     "type": "lecture",
+     "segment_id": "seg_0036",
+     "start": 250.58,
+     "end": 264.82
+    },
+    {
+     "type": "lecture",
+     "segment_id": "seg_0058",
+     "start": 347.46,
+     "end": 354.58
+    }
+   ]
+  },
+  {
+   "id": "st_0021",
+   "section_id": "sec_03",
+   "text": "The gradient direction indicates the steepest ascent; moving perpendicular to the level set increases the function fastest.",
+   "sources": [
+    {
+     "type": "lecture",
+     "segment_id": "seg_0060",
+     "start": 356.57,
+     "end": 361.13
+    },
+    {
+     "type": "lecture",
+     "segment_id": "seg_0061",
+     "start": 361.29,
+     "end": 368.41
+    },
+    {
+     "type": "lecture",
+     "segment_id": "seg_0062",
+     "start": 368.49,
+     "end": 371.45
+    },
+    {
+     "type": "lecture",
+     "segment_id": "seg_0063",
+     "start": 371.69,
+     "end": 373.29
+    },
+    {
+     "type": "lecture",
+     "segment_id": "seg_0064",
+     "start": 373.45,
+     "end": 375.69
+    },
+    {
+     "type": "lecture",
+     "segment_id": "seg_0072",
+     "start": 401.37,
+     "end": 408.97
+    }
+   ]
+  },
+  {
+   "id": "st_0022",
+   "section_id": "sec_03",
+   "text": "For f=2x+5y, the level set where f=0 is the plane 2x+5y=0; staying in this plane keeps the function value constant.",
+   "sources": [
+    {
+     "type": "lecture",
+     "segment_id": "seg_0068",
+     "start": 387.37,
+     "end": 394.57
+    },
+    {
+     "type": "lecture",
+     "segment_id": "seg_0069",
+     "start": 396.33,
+     "end": 398.17
+    },
+    {
+     "type": "lecture",
+     "segment_id": "seg_0072",
+     "start": 401.37,
+     "end": 408.97
+    },
+    {
+     "type": "lecture",
+     "segment_id": "seg_0073",
+     "start": 409.69,
+     "end": 415.69
+    },
+    {
+     "type": "lecture",
+     "segment_id": "seg_0078",
+     "start": 439.05,
+     "end": 440.65
+    },
+    {
+     "type": "lecture",
+     "segment_id": "seg_0079",
+     "start": 440.81,
+     "end": 444.17
+    }
+   ]
+  },
+  {
+   "id": "st_0023",
+   "section_id": "sec_03",
+   "text": "A level set of a function is the set of points where the function has a constant value; for two variables it is a level curve or contour line.",
+   "sources": [
+    {
+     "type": "web",
+     "url": "https://en.wikipedia.org/wiki/Level_set",
+     "title": "Level set - Wikipedia"
+    }
+   ]
+  },
+  {
+   "id": "st_0024",
+   "section_id": "sec_03",
+   "text": "The Hessian matrix consists of second‑order partial derivatives; for this linear function all second derivatives are zero, so the Hessian is the zero 2×2 matrix.",
+   "sources": [
+    {
+     "type": "lecture",
+     "segment_id": "seg_0036",
+     "start": 250.58,
+     "end": 264.82
+    },
+    {
+     "type": "lecture",
+     "segment_id": "seg_0037",
+     "start": 264.98,
+     "end": 270.18
+    },
+    {
+     "type": "lecture",
+     "segment_id": "seg_0039",
+     "start": 275.22,
+     "end": 276.82
+    },
+    {
+     "type": "lecture",
+     "segment_id": "seg_0040",
+     "start": 276.98,
+     "end": 278.1
+    },
+    {
+     "type": "lecture",
+     "segment_id": "seg_0041",
+     "start": 278.26,
+     "end": 278.98
+    },
+    {
+     "type": "lecture",
+     "segment_id": "seg_0043",
+     "start": 286.58,
+     "end": 290.5
+    }
+   ]
+  },
+  {
+   "id": "st_0025",
+   "section_id": "sec_03",
+   "text": "The Hessian matrix describes the local curvature of a function.",
+   "sources": [
+    {
+     "type": "web",
+     "url": "https://en.wikipedia.org/wiki/Hessian_matrix",
+     "title": "Hessian matrix - Wikipedia"
+    }
+   ]
+  },
+  {
+   "id": "st_0026",
+   "section_id": "sec_03",
+   "text": "The lecturer asks how the Hessian relates to the convexity of the function.",
+   "sources": [
+    {
+     "type": "lecture",
+     "segment_id": "seg_0099",
+     "start": 586.08,
+     "end": 592.8
+    },
+    {
+     "type": "lecture",
+     "segment_id": "seg_0100",
+     "start": 593.12,
+     "end": 597.68
+    }
+   ]
+  },
+  {
+   "id": "st_0027",
+   "section_id": "sec_03",
+   "text": "Geometrically, a function is convex if a line segment drawn from any point (x, f(x)) to another point (y, f(y)) lies above or on the graph of the function.",
+   "sources": [
+    {
+     "type": "web",
+     "url": "https://www.solver.com/convex-optimization",
+     "title": "Optimization Problem Types - Convex Optimization | solver"
+    }
+   ]
+  }
+ ],
+ "sections": [
+  {
+   "id": "sec_01",
+   "title": "Pure Quadratic Example",
+   "start": 0.24,
+   "end": 105.28,
+   "segment_ids": [
+    "seg_0001",
+    "seg_0002",
+    "seg_0003",
+    "seg_0004",
+    "seg_0005",
+    "seg_0006",
+    "seg_0007",
+    "seg_0008",
+    "seg_0009",
+    "seg_0010",
+    "seg_0011",
+    "seg_0012",
+    "seg_0013",
+    "seg_0014"
+   ]
+  },
+  {
+   "id": "sec_02",
+   "title": "Steepest Descent Steps",
+   "start": 105.28,
+   "end": 186.95,
+   "segment_ids": [
+    "seg_0015",
+    "seg_0016",
+    "seg_0017",
+    "seg_0018",
+    "seg_0019",
+    "seg_0020",
+    "seg_0021",
+    "seg_0022",
+    "seg_0023",
+    "seg_0024",
+    "seg_0025",
+    "seg_0026"
+   ]
+  },
+  {
+   "id": "sec_03",
+   "title": "Gradient Hessian Connection",
+   "start": 186.95,
+   "end": 599.6,
+   "segment_ids": [
+    "seg_0027",
+    "seg_0028",
+    "seg_0029",
+    "seg_0030",
+    "seg_0031",
+    "seg_0032",
+    "seg_0033",
+    "seg_0034",
+    "seg_0035",
+    "seg_0036",
+    "seg_0037",
+    "seg_0038",
+    "seg_0039",
+    "seg_0040",
+    "seg_0041",
+    "seg_0042",
+    "seg_0043",
+    "seg_0044",
+    "seg_0045",
+    "seg_0046",
+    "seg_0047",
+    "seg_0048",
+    "seg_0049",
+    "seg_0050",
+    "seg_0051",
+    "seg_0052",
+    "seg_0053",
+    "seg_0054",
+    "seg_0055",
+    "seg_0056",
+    "seg_0057",
+    "seg_0058",
+    "seg_0059",
+    "seg_0060",
+    "seg_0061",
+    "seg_0062",
+    "seg_0063",
+    "seg_0064",
+    "seg_0065",
+    "seg_0066",
+    "seg_0067",
+    "seg_0068",
+    "seg_0069",
+    "seg_0070",
+    "seg_0071",
+    "seg_0072",
+    "seg_0073",
+    "seg_0074",
+    "seg_0075",
+    "seg_0076",
+    "seg_0077",
+    "seg_0078",
+    "seg_0079",
+    "seg_0080",
+    "seg_0081",
+    "seg_0082",
+    "seg_0083",
+    "seg_0084",
+    "seg_0085",
+    "seg_0086",
+    "seg_0087",
+    "seg_0088",
+    "seg_0089",
+    "seg_0090",
+    "seg_0091",
+    "seg_0092",
+    "seg_0093",
+    "seg_0094",
+    "seg_0095",
+    "seg_0096",
+    "seg_0097",
+    "seg_0098",
+    "seg_0099",
+    "seg_0100",
+    "seg_0101"
+   ]
+  }
+ ],
+ "summary": {
+  "example": true,
+  "judged": false,
+  "warnings": [
+   "This example was written without the judge, so its notes are NOT source-checked."
+  ]
+ }
+}
