@@ -16,10 +16,26 @@ function read() {
   }
 }
 
+// One stored entry, with every field checked: anything else in localStorage (old versions, hand edits, a failed write)
+// must never reach the page. An entry without a string id is skipped.
+function clean(entry) {
+  if (!entry || typeof entry !== 'object' || typeof entry.id !== 'string' || !entry.id) return null
+  const count = (value) => (typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined)
+  return {
+    id: entry.id,
+    name: typeof entry.name === 'string' ? entry.name : '',
+    createdAt: count(entry.createdAt) || 0,
+    status: typeof entry.status === 'string' ? entry.status : 'queued',
+    sections: count(entry.sections),
+    statements: count(entry.statements),
+  }
+}
+
+// Never throws: bad JSON, an object instead of an array or junk entries all give a shorter (maybe empty) list.
 function parse(raw) {
   try {
     const list = JSON.parse(raw || '[]')
-    return Array.isArray(list) ? list.filter((e) => e && typeof e.id === 'string').slice(0, RECENT_MAX) : []
+    return Array.isArray(list) ? list.map(clean).filter(Boolean).slice(0, RECENT_MAX) : []
   } catch {
     return []
   }
@@ -49,6 +65,15 @@ export function clearRecent() {
   write([])
 }
 
+// For the error screen: forget the list and the old "last job" key.
+export function clearSaved() {
+  try {
+    localStorage.removeItem(RECENT_KEY)
+    localStorage.removeItem('voice2text.jobId')
+  } catch {}
+  window.dispatchEvent(new Event(CHANGED))
+}
+
 function subscribe(callback) {
   window.addEventListener(CHANGED, callback)
   window.addEventListener('storage', callback)
@@ -58,7 +83,12 @@ function subscribe(callback) {
   }
 }
 
+const noSubscription = () => () => {}
+
+// null until the page has mounted in the browser (the server and the first client render both show a loading state),
+// then the checked list.
 export function useRecentJobs() {
+  const mounted = useSyncExternalStore(noSubscription, () => true, () => false)
   const raw = useSyncExternalStore(subscribe, read, () => null)
-  return useMemo(() => parse(raw), [raw])
+  return useMemo(() => (mounted ? parse(raw) : null), [mounted, raw])
 }

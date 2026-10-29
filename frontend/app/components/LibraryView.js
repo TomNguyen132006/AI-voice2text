@@ -68,20 +68,20 @@ function Row({ entry, live }) {
 }
 
 export default function LibraryView() {
-  const recent = useRecentJobs()
+  const stored = useRecentJobs() // null until mounted
+  const recent = stored || []
   const [live, setLive] = useState({}) // id -> { state: 'live' | 'expired' | 'offline', status }
-  const ids = recent.map((entry) => entry.id).join('|')
+  const ids = JSON.stringify(recent.map((entry) => entry.id)) // a stable key: the effect runs again only when the set of ids changes
 
   // Ask the server about every row (at most 20). A 404 means the job is gone: the row says "expired", never a broken page.
   useEffect(() => {
-    if (!ids) return
     let cancelled = false
-    for (const id of ids.split('|')) {
+    for (const id of JSON.parse(ids)) {
       getJob(id)
         .then((job) => {
           if (cancelled) return
           setLive((current) => ({ ...current, [id]: { state: 'live', status: job.status } }))
-          updateRecent(id, job.status === 'done' ? { status: job.status, sections: job.sections.length, statements: job.statements.length } : { status: job.status })
+          updateRecent(id, job.status === 'done' ? { status: job.status, sections: job.sections?.length, statements: job.statements?.length } : { status: job.status })
         })
         .catch((error) => {
           if (cancelled) return
@@ -121,7 +121,11 @@ export default function LibraryView() {
             Clear list
           </button>
         </div>
-        {recent.length === 0 ? (
+        {stored === null ? (
+          <p role="status" className="mt-5 text-muted-foreground">
+            Loading your list…
+          </p>
+        ) : recent.length === 0 ? (
           <div className="story-panel mt-5 flex flex-col items-start gap-4 !p-6">
             <p>Nothing here yet. Lectures you start on this device show up in this list (the last 20).</p>
             <Link href="/app/new" className="story-button story-button-coral story-button-small">
