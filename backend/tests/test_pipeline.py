@@ -161,3 +161,98 @@ def test_audio_upload_goes_to_the_transcriber(tmp_path, monkeypatch):
     job = pipeline.run_pipeline("job_p1", "lecture.mp3", storage)
     assert got == {"suffix": ".mp3", "bytes": b"not really audio"} and job.stage == "cleaning"
     assert load_json(job_key("job_p1", "transcript.json"), storage)[0]["text"] == "hello"
+
+
+# --- light mode -----------------------------------------------------------------------------------------------
+
+class NoSearch:
+    """A search provider that fails the test if light mode ever calls it."""
+
+    def search(self, *args, **kwargs):
+        raise AssertionError("light mode must not search the web")
+
+
+def system_prompts(client):
+    return [c["messages"][0]["content"] for c in client.calls]
+
+
+def run_light(tmp_path, monkeypatch, provider=None):
+    monkeypatch.setenv("PIPELINE_MODE", "light")
+    storage = start(tmp_path)
+    client = FakeClient(router)
+    job = pipeline.run_pipeline("job_p1", "lecture.srt", storage, client=client, provider=provider or NoSearch())
+    return storage, client, job
+
+
+def test_light_mode_never_calls_gaps_search_judge_or_fixer(tmp_path, monkeypatch):
+    storage, client, job = run_light(tmp_path, monkeypatch)
+    assert job.status == "done"
+    used = system_prompts(client)
+    for forbidden in (gaps.SYSTEM_PROMPT, judge.SYSTEM_PROMPT, fix.SYSTEM_PROMPT):
+        assert not any(p.startswith(forbidden[:40]) for p in used)
+    for needed in (clean.SYSTEM_PROMPT, topics.SYSTEM_PROMPT, notes.SYSTEM_PROMPT, slides.SYSTEM_PROMPT):
+        assert any(p.startswith(needed[:40]) for p in used)
+    report = load_json(job_key("job_p1", "pipeline_report.json"), storage)
+    assert report["mode"] == "light" and set(report["seconds_per_stage"]) == {"transcribing", "cleaning", "writing", "exporting"}
+    by_stage = load_json(job_key("job_p1", "call_stats.json"), storage)["by_stage"]
+    assert not {"judge", "fixer", "gap_finder"} & set(by_stage) and {"cleaning", "topic_split", "notes_writer", "slide_writer"} <= set(by_stage)
+
+
+def test_light_mode_writes_no_judge_files_and_still_makes_all_three_outputs(tmp_path, monkeypatch):
+    storage, _, job = run_light(tmp_path, monkeypatch)
+    for name in ("notes_final.json", "judge.json", "judge_report.json", "fix_log.json", "gaps.json", "search.json"):
+        with pytest.raises(FileNotFoundError):
+            storage.load_bytes(job_key("job_p1", name))
+    for name in ("notes.json", "slides.json", "notes.md", "slides.pptx", "transcript.txt"):
+        storage.load_bytes(job_key("job_p1", name))
+    assert job.outputs.md and job.outputs.pptx and job.outputs.txt
+
+
+def test_light_mode_notes_and_deck_say_not_judged(tmp_path, monkeypatch):
+    storage, _, _ = run_light(tmp_path, monkeypatch)
+    md = storage.load_bytes(job_key("job_p1", "notes.md")).decode("utf-8")
+    assert "NOT JUDGED" in md and "source-checked" not in md.lower()
+    prs = Presentation(io.BytesIO(storage.load_bytes(job_key("job_p1", "slides.pptx"))))
+    text = lambda slide: "\n".join(p.text for sh in slide.shapes if sh.has_text_frame for p in sh.text_frame.paragraphs)
+    assert "not judged" in text(prs.slides[0]) and "source-checked" not in text(prs.slides[0])
+    assert "not judged" in text(prs.slides[1]) and "source-checked" not in text(prs.slides[1])
+
+
+def test_light_mode_slides_use_notes_json(tmp_path, monkeypatch):
+    storage, _, _ = run_light(tmp_path, monkeypatch)
+    drafted = [s["id"] for s in load_json(job_key("job_p1", "notes.json"), storage)]
+    shown = [b["id"] for slide in load_json(job_key("job_p1", "slides.json"), storage) for b in slide["bullets"]]
+    assert drafted and set(shown) <= set(drafted)
+
+
+def test_full_mode_is_the_default_and_unchanged(tmp_path, monkeypatch):
+    monkeypatch.delenv("PIPELINE_MODE", raising=False)
+    storage = start(tmp_path)
+    client = FakeClient(router)
+    job = pipeline.run_pipeline("job_p1", "lecture.srt", storage, client=client, provider=enrich.FakeProvider())
+    assert job.status == "done"
+    used = system_prompts(client)
+    for needed in (gaps.SYSTEM_PROMPT, judge.SYSTEM_PROMPT):
+        assert any(p.startswith(needed[:40]) for p in used)
+    report = load_json(job_key("job_p1", "pipeline_report.json"), storage)
+    assert report["mode"] == "full" and set(report["seconds_per_stage"]) == set(pipeline.STAGES)
+    storage.load_bytes(job_key("job_p1", "notes_final.json"))
+
+
+def test_explicit_full_mode_behaves_like_the_default(tmp_path, monkeypatch):
+    monkeypatch.setenv("PIPELINE_MODE", " FULL ")
+    assert pipeline.pipeline_mode() == "full"
+    storage = start(tmp_path)
+    job = pipeline.run_pipeline("job_p1", "lecture.srt", storage, client=FakeClient(router), provider=enrich.FakeProvider())
+    assert job.status == "done" and set(load_json(job_key("job_p1", "pipeline_report.json"), storage)["seconds_per_stage"]) == set(pipeline.STAGES)
+
+
+def test_unknown_mode_is_a_clear_error_and_makes_no_model_call(tmp_path, monkeypatch):
+    monkeypatch.setenv("PIPELINE_MODE", "fast")
+    storage = start(tmp_path)
+    client = FakeClient(router)
+    job = pipeline.run_pipeline("job_p1", "lecture.srt", storage, client=client)
+    assert job.status == "error" and "PIPELINE_MODE must be one of full, light" in job.error and "'fast'" in job.error
+    assert client.calls == []
+    with pytest.raises(ValueError):
+        pipeline.pipeline_mode()

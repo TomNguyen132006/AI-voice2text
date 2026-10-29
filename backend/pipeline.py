@@ -30,6 +30,16 @@ TRANSCRIPT_EXTENSIONS = {".txt", ".srt", ".vtt"}
 ALLOWED_EXTENSIONS = AUDIO_EXTENSIONS | TRANSCRIPT_EXTENSIONS
 STAGES = ["transcribing", "cleaning", "enriching", "writing", "judging", "exporting"]
 ERROR_MAX_CHARS = 300
+PIPELINE_MODES = ("full", "light")
+LIGHT_SKIPS = ("enriching", "judging")  # light mode: no gap finder, no web search, no judge, no fixer
+
+
+def pipeline_mode() -> str:
+    """PIPELINE_MODE from the environment: "full" (default) or "light". Anything else is an error with a clear message."""
+    mode = (os.getenv("PIPELINE_MODE") or "full").strip().lower()
+    if mode not in PIPELINE_MODES:
+        raise ValueError(f"PIPELINE_MODE must be one of {', '.join(PIPELINE_MODES)}, got {mode!r}")
+    return mode
 DEFAULT_MAX_TRANSCRIPT_CHARS = 15000
 
 
@@ -121,10 +131,10 @@ def _judge_stage(job_id, storage, client):
     fix.fix_job(job_id, "notes.json", storage=storage, client=client)
 
 
-def _export_stage(job_id, storage, client, warnings):
+def _export_stage(job_id, storage, client, warnings, statements_file="notes_final.json"):
     import export
     import slides
-    result = slides.slides_job(job_id, storage=storage, client=client, statements_file="notes_final.json")
+    result = slides.slides_job(job_id, storage=storage, client=client, statements_file=statements_file)
     warnings.extend(result.report["warnings"])
     export.export_job(job_id, storage, warnings=warnings)
 
@@ -133,14 +143,24 @@ def run_pipeline(job_id: str, filename: str, storage=None, client=None, engine=N
     """Run every stage for an uploaded file. Never raises: a failure becomes a Job with status "error"."""
     storage = storage or get_storage()
     warnings: list[str] = []
+    try:
+        mode = pipeline_mode()
+    except ValueError as error:
+        job = Job(id=job_id, status="error", stage="queued", error=str(error)[:ERROR_MAX_CHARS])
+        save_job(job, storage)
+        _save_report(job_id, storage, job, {}, time.time(), warnings)
+        return job
+    light = mode == "light"  # notes and slides rest on the lecture alone; the judge never ran, so the files say "not judged"
     steps = [
         ("transcribing", lambda: _transcribe_stage(job_id, filename, storage, engine)),
         ("cleaning", lambda: _clean_stage(job_id, storage, client)),
         ("enriching", lambda: _enrich_stage(job_id, storage, client, provider, warnings)),
         ("writing", lambda: _write_stage(job_id, storage, client)),
         ("judging", lambda: _judge_stage(job_id, storage, client)),
-        ("exporting", lambda: _export_stage(job_id, storage, client, warnings)),
+        ("exporting", lambda: _export_stage(job_id, storage, client, warnings, "notes.json" if light else "notes_final.json")),
     ]
+    if light:
+        steps = [step for step in steps if step[0] not in LIGHT_SKIPS]
     seconds: dict[str, float] = {}
     started = time.time()
     job = Job(id=job_id, status="running", stage="queued")
@@ -166,7 +186,7 @@ def run_pipeline(job_id: str, filename: str, storage=None, client=None, engine=N
 def _save_report(job_id, storage, job, seconds, started, warnings) -> None:
     try:
         save_json(job_key(job_id, "pipeline_report.json"), {
-            "job_id": job_id, "status": job.status, "stage": job.stage, "error": job.error, "warnings": warnings,
+            "job_id": job_id, "mode": os.getenv("PIPELINE_MODE", "full").strip().lower() or "full", "status": job.status, "stage": job.stage, "error": job.error, "warnings": warnings,
             "seconds_per_stage": seconds, "total_seconds": round(time.time() - started, 1),
             "model_calls": llm.summarize_log(job_id=job_id),
         }, storage)
