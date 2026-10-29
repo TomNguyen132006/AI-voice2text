@@ -46,7 +46,7 @@ function Summary({ job, sectionCount }) {
   const checked = summary.kept === undefined ? null : summary.kept - (summary.kept_unjudged || 0)
   return (
     <div className="flex flex-col gap-3">
-      <dl className="story-panel grid grid-cols-2 gap-x-4 gap-y-5 !p-5 sm:grid-cols-3 lg:grid-cols-6">
+      <dl className="story-panel grid grid-cols-2 gap-x-4 gap-y-5 !p-5 sm:grid-cols-3">
         <Figure value={sectionCount} label="sections" />
         <Figure value={statements.length} label="notes" />
         {checked !== null && <Figure value={checked} label="source-checked" />}
@@ -55,9 +55,9 @@ function Summary({ job, sectionCount }) {
         {typeof summary.est_cost_usd === 'number' && <Figure value={`$${summary.est_cost_usd.toFixed(3)}`} label="model cost" />}
       </dl>
       {summary.dropped > 0 && (
-        <p className="text-muted-foreground">{summary.dropped} notes were removed because the judge could not confirm them against their sources.</p>
+        <p className="text-muted-foreground">{summary.dropped} {summary.dropped === 1 ? 'note was' : 'notes were'} removed because the judge could not confirm {summary.dropped === 1 ? 'it' : 'them'} against {summary.dropped === 1 ? 'its' : 'their'} sources.</p>
       )}
-      {summary.kept_unjudged > 0 && <p className="text-muted-foreground">{summary.kept_unjudged} notes were kept without a verdict because the judge failed.</p>}
+      {summary.kept_unjudged > 0 && <p className="text-muted-foreground">{summary.kept_unjudged} {summary.kept_unjudged === 1 ? 'note was' : 'notes were'} kept without a verdict because the judge failed.</p>}
       {(summary.warnings || []).map((warning) => (
         <p key={warning} className="text-muted-foreground">
           Note: {warning}

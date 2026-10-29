@@ -91,7 +91,7 @@ export default function UploadBox({ busy, fileName, waking, notice, onFile, onSa
         <dd>Audio (.mp3, .wav, .mp4 and so on) works only on a server with a GPU. If this one has none, you will be asked for a transcript.</dd>
       </dl>
       <div className="flex flex-col gap-3 border-t border-border pt-5 sm:flex-row sm:items-center sm:gap-4">
-        <button type="button" onClick={onSample} disabled={busy} className="story-button story-button-outline story-button-small w-full sm:w-auto">
+        <button type="button" onClick={onSample} disabled={busy} className="story-button story-button-outline story-button-small w-full whitespace-nowrap sm:w-auto">
           Try the sample
         </button>
         <p className="text-[15px] text-muted-foreground">Short hand-written data to show the layout. No model is called.</p>
