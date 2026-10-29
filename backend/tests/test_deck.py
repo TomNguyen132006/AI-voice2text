@@ -201,6 +201,7 @@ def test_title_slide_numbers():
     assert "1 section - 3 statements - 2 source-checked by the judge" in text
     assert "Built with Nemotron on Nebius Token Factory. Every statement cites a lecture time or a web link." in text
     assert prs.slides[0].shapes.title.text == "CSC 335 databases"
+    assert "Lecturesque" in text and prs.core_properties.author == "Lecturesque"
 
 
 def test_title_slide_says_not_judged_for_a_job_without_judge_and_has_no_made_up_number_without_data():

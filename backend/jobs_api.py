@@ -241,4 +241,4 @@ def download(job_id: str, name: str):
             data = storage.load_bytes(job_key(job_id, name))
     except (FileNotFoundError, StorageError):
         raise HTTPException(status_code=404, detail="File not found")
-    return Response(content=data, media_type=DOWNLOADS[name], headers={"Content-Disposition": f'attachment; filename="{name}"'})
+    return Response(content=data, media_type=DOWNLOADS[name], headers={"Content-Disposition": f'attachment; filename="lecturesque-{name}"'})

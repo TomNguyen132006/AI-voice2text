@@ -221,6 +221,8 @@ def _title_slide(prs, title, stats_line, number):
     s = prs.slides.add_slide(prs.slide_layouts[5])
     _background(s, NAVY)
     _rect(s, 0, 0, 0.18, SLIDE_H, TEAL)
+    box, tf = _textbox(s, 0.9, 0.6, 6.0, 0.5)
+    _run(tf.paragraphs[0], "Lecturesque", 20, TEAL, bold=True)
     _title(s, title, 0.9, 1.4, 11.5, 2.0, ON_NAVY, 3, (44, 38, 32, 28), anchor=MSO_ANCHOR.BOTTOM)
     _rect(s, 0.95, 3.65, 1.4, 0.06, TEAL)
     box, tf = _textbox(s, 0.9, 3.9, 11.5, 0.6)
@@ -471,6 +473,7 @@ def build_deck(
     prs.slide_width, prs.slide_height = Inches(SLIDE_W), Inches(SLIDE_H)
     _theme_link_colors(prs)
     prs.core_properties.title = title
+    prs.core_properties.author = "Lecturesque"
     if judged is False:
         status = {st.id: "not judged" for st in statements}
     status = status or {}

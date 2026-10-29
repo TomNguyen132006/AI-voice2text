@@ -1,4 +1,4 @@
-/* The look of the Narrator project, adapted for AI-voice2text: pill buttons with a hard shadow, a highlighter "marker",
+/* The look of the Narrator project, adapted for Lecturesque: pill buttons with a hard shadow, a highlighter "marker",
    a small rotated handwritten label, one sticker, a dark "how it works" block. Colors come from the tokens in globals.css,
    so the dark mode needs no extra rules here. Small labels are 12px or more. */
 .story-site {

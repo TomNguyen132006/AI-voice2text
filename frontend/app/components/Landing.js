@@ -14,9 +14,9 @@ function Tick() {
 export function Nav() {
   return (
     <header className="story-nav story-wrap">
-      <Link href="/" className="story-logo" aria-label="AI-voice2text home">
+      <Link href="/" className="story-logo" aria-label="Lecturesque home">
         <span aria-hidden="true" />
-        AI-voice2text
+        Lecturesque
       </Link>
       <nav aria-label="Main navigation">
         <Link href="/#how" className="nav-link">
@@ -96,7 +96,7 @@ export function Footer() {
     <footer className="story-footer story-wrap">
       <Link href="/" className="story-logo">
         <span aria-hidden="true" />
-        AI-voice2text
+        Lecturesque
       </Link>
       <p>Built with Nemotron on Nebius Token Factory</p>
       <HealthStatus />

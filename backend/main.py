@@ -11,7 +11,7 @@ load_dotenv()
 # Frontend URLs allowed to call this API from the browser (comma-separated).
 FRONTEND_ORIGINS = (os.getenv("FRONTEND_ORIGINS") or "http://localhost:3000").split(",")
 
-app = FastAPI(title="AI-voice2text backend")
+app = FastAPI(title="Lecturesque backend")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[origin.strip() for origin in FRONTEND_ORIGINS if origin.strip()],
@@ -23,7 +23,7 @@ app.include_router(jobs_router)
 
 @app.get("/")
 def root():
-    return {"message": "AI-voice2text backend is running"}
+    return {"message": "Lecturesque backend is running"}
 
 
 @app.get("/health")

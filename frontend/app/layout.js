@@ -3,7 +3,7 @@ import './story.css'
 import { bodyFont, headlineFont, labelFont, noteFont } from './fonts'
 
 export const metadata = {
-  title: 'AI-voice2text: your lecture, turned into notes you can check',
+  title: 'Lecturesque: your lecture, turned into notes you can check',
   description: 'Turn a lecture transcript into study notes, slides and a timestamped transcript. Every note shows its source.',
 }
 

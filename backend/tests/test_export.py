@@ -37,6 +37,7 @@ def test_transcript_txt_has_one_stamped_line_per_segment():
 def test_notes_md_has_sources_on_every_point():
     md = export.notes_md(SECTIONS, STATEMENTS)
     assert md.startswith("# Lecture notes") and "## Loss and gradient" in md
+    assert "Made with Lecturesque." in md
     bullets = [b for b in md.split("\n- ")[1:]]
     assert len(bullets) == len(STATEMENTS)
     assert all("📍" in b for b in bullets)  # every sample statement has a lecture source

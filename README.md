@@ -1,4 +1,6 @@
-# AI-voice2text
+# Lecturesque
+
+Turn a lecture into notes and slides where every line cites a lecture timestamp or a web link, then gets checked against that source.
 
 Turn a lecture recording into trustworthy study materials.
 

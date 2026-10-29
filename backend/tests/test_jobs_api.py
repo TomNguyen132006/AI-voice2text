@@ -76,7 +76,7 @@ def test_sample_job_is_done_with_statements_and_downloads(client):
     assert client.get(body["outputs"]["md"]).text.startswith("# Lecture notes")
     assert client.get(body["outputs"]["txt"]).text.startswith("[00:00]")
     pptx = client.get(body["outputs"]["pptx"])
-    assert pptx.content[:2] == b"PK" and "attachment" in pptx.headers["content-disposition"]
+    assert pptx.content[:2] == b"PK" and pptx.headers["content-disposition"] == 'attachment; filename="lecturesque-slides.pptx"'
     z = client.get("/jobs/job_sample/files/all.zip")
     assert sorted(zipfile.ZipFile(io.BytesIO(z.content)).namelist()) == ["notes.md", "slides.pptx", "transcript.txt"]
     assert client.get("/jobs/job_sample/files/secrets.json").status_code == 404

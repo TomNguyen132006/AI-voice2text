@@ -62,7 +62,7 @@ def notes_md(sections: list[Section], statements: list[Statement], title: str = 
     lines = [f"# {title}", ""]
     if not judged:
         lines += [NOT_JUDGED_LINE, ""]
-    lines += ["Every point ends with its source: 📍 a time range in the lecture recording, 🌐 a web link.", ""]
+    lines += ["Made with Lecturesque. Every point ends with its source: 📍 a time range in the lecture recording, 🌐 a web link.", ""]
     header = len(lines)
     for section in sections:
         own = [s for s in statements if s.section_id == section.id]
