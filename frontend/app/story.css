@@ -498,3 +498,23 @@
     transition: none !important;
   }
 }
+
+/* "Open the app" in the nav: on a narrow phone the text link makes room for it */
+@media (max-width: 560px) {
+  .story-nav nav {
+    gap: 10px;
+  }
+  .story-nav nav > a:not(.story-button) {
+    display: none;
+  }
+  .story-nav {
+    gap: 10px;
+  }
+  .story-nav .story-logo {
+    font-size: 24px;
+  }
+  .nav-open {
+    white-space: nowrap;
+    padding-inline: 16px;
+  }
+}

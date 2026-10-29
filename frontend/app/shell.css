@@ -1,0 +1,183 @@
+/* The app shell at /app: sidebar on a computer, top bar and drawer on a phone. Colors come from the tokens in globals.css,
+   so the dark mode needs no extra rules. */
+.shell {
+  --sidebar: var(--card);
+  --sidebar-border: var(--border);
+  flex-direction: row;
+  align-items: stretch;
+}
+.shell-side {
+  position: sticky;
+  top: 0;
+  align-self: flex-start;
+  flex: none;
+  width: 272px;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  padding: 28px 18px;
+  background: var(--sidebar);
+  border-right: 1px solid var(--sidebar-border);
+}
+.shell-brand {
+  padding-inline: 10px;
+}
+.shell-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.shell-nav a {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  padding: 0 16px;
+  border-radius: 999px;
+  font-weight: 600;
+  color: var(--foreground);
+}
+.shell-nav a:hover {
+  background: var(--secondary);
+}
+.shell-nav a[aria-current='page'] {
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+.shell-note {
+  margin-top: auto;
+  padding-inline: 10px;
+  font-size: 14px;
+  color: var(--muted-foreground);
+}
+.shell-main {
+  flex: 1;
+  min-width: 0;
+}
+.shell-content {
+  max-width: 880px;
+  margin-inline: auto;
+  padding: 44px 32px 96px;
+}
+.shell-top,
+.shell-scrim {
+  display: none;
+}
+
+@media (max-width: 899px) {
+  .shell {
+    flex-direction: column;
+  }
+  .shell-top {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 68px;
+    padding-inline: 16px;
+    background: var(--background);
+    border-bottom: 1px solid var(--border);
+  }
+  .shell-top .story-logo {
+    font-size: 24px;
+  }
+  .shell-scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    background: rgb(10 18 13 / 0.55);
+  }
+  .shell-side {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 50;
+    width: min(300px, 86vw);
+    box-shadow: 8px 0 0 color-mix(in oklab, var(--foreground) 10%, transparent);
+    transform: translateX(-105%);
+    visibility: hidden;
+    transition:
+      transform 0.25s,
+      visibility 0s 0.25s;
+  }
+  .shell-side[data-open='true'] {
+    transform: none;
+    visibility: visible;
+    transition: transform 0.25s;
+  }
+  .shell-content {
+    padding: 28px 16px 72px;
+  }
+}
+
+/* Library */
+.lib-section {
+  margin-top: 40px;
+}
+.lib-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 18px;
+}
+.lib-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px 20px;
+  padding: 18px 22px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  box-shadow: 0 6px 0 color-mix(in oklab, var(--foreground) 7%, transparent);
+}
+.lib-row-main {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+.lib-row-title {
+  font-family: var(--font-story-heading), Georgia, serif;
+  font-size: 22px;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.lib-meta {
+  margin-top: 4px;
+  font-size: 15px;
+  color: var(--muted-foreground);
+}
+.badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 2px 12px;
+  border-radius: 999px;
+  font-family: var(--font-story-label), ui-monospace, monospace;
+  font-size: 12px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+.badge-sticker {
+  background: var(--sticker);
+  color: #1f3b2d;
+}
+.badge-warn {
+  background: var(--destructive-soft);
+  color: var(--destructive);
+}
+.badge-peach {
+  background: var(--peach);
+  color: var(--foreground);
+}
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
