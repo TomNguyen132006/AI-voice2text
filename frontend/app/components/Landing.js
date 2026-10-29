@@ -22,7 +22,7 @@ export function Nav() {
         <Link href="/#how" className="nav-link">
           How it works
         </Link>
-        <Link href="/app" className="story-button story-button-forest story-button-small nav-open">
+        <Link href="/app/library" className="story-button story-button-forest story-button-small nav-open">
           Open the app
         </Link>
         <ThemeToggle />

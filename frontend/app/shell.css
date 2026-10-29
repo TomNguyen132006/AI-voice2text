@@ -181,3 +181,43 @@
   gap: 8px;
   margin-bottom: 8px;
 }
+
+/* Back button: top-left of the content on a computer, in the top bar on a phone */
+.shell-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 16px 0 10px;
+  border: 1px solid var(--control);
+  border-radius: 999px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--foreground);
+  background: transparent;
+}
+.shell-back:hover {
+  background: var(--accent);
+}
+.shell-back-desktop {
+  margin-bottom: 22px;
+}
+.shell-top-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+@media (max-width: 899px) {
+  .shell-back-desktop {
+    display: none;
+  }
+  .shell-top .story-logo {
+    font-size: 22px;
+  }
+}
+@media (min-width: 900px) {
+  .shell-top .shell-back {
+    display: none;
+  }
+}

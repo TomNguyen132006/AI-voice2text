@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
+import BackLink from './BackLink'
 
 const icon = { 'aria-hidden': true, viewBox: '0 0 24 24', width: 20, height: 20, fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round', strokeLinejoin: 'round' }
 
@@ -106,7 +107,10 @@ export default function AppShell({ children }) {
         Skip to content
       </a>
       <header className="shell-top">
-        <Logo />
+        <div className="shell-top-left">
+          <BackLink pathname={pathname} />
+          <Logo />
+        </div>
         <button
           ref={menuButton}
           type="button"
@@ -136,6 +140,7 @@ export default function AppShell({ children }) {
       </aside>
       <main id="story-main" tabIndex={-1} className="shell-main">
         <div className="shell-content">
+          <BackLink pathname={pathname} className="shell-back-desktop" />
           <h1 className="sr-only">{pageTitle}</h1>
           {children}
         </div>

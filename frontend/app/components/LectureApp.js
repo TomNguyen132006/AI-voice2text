@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useReducer, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useReducer, useState } from 'react'
 import { createJob, createSampleJob, describeError, describeJobFailure, getJob } from '../lib/api'
 import { useAfter } from '../lib/hooks'
 import { jobReducer as reducer } from '../lib/jobReducer'
@@ -8,6 +8,7 @@ import { addRecent } from '../lib/recent'
 import ErrorNotice from './ErrorNotice'
 import ProgressView from './ProgressView'
 import ResultsView from './ResultsView'
+import ResumeLink from './ResumeLink'
 import { HowItWorks, Values } from './Landing'
 import UploadBox from './UploadBox'
 
@@ -22,29 +23,6 @@ function remember(id) {
   } catch {}
 }
 
-// The id of the last job, so a reload comes back to it. The server renders the start screen (null).
-function readSaved() {
-  try {
-    return localStorage.getItem(STORAGE_KEY)
-  } catch {
-    return null
-  }
-}
-const noSubscription = () => () => {}
-
-function Loading() {
-  return (
-    <div role="status" aria-live="polite" className="flex flex-col gap-4">
-      <h2 className="text-3xl">Loading your notes…</h2>
-      <div aria-hidden className="flex animate-pulse flex-col gap-3">
-        <div className="h-5 w-2/3 rounded-full bg-accent" />
-        <div className="h-5 w-full rounded-full bg-accent" />
-        <div className="h-5 w-5/6 rounded-full bg-accent" />
-      </div>
-    </div>
-  )
-}
-
 // A job (running, failed or done) lives in one calm column; the start page has the hero.
 function Column({ children }) {
   return (
@@ -56,8 +34,6 @@ function Column({ children }) {
 
 export default function LectureApp() {
   const [{ job, log }, dispatch] = useReducer(reducer, { job: null, log: {} })
-  const savedId = useSyncExternalStore(noSubscription, readSaved, () => null)
-  const [restored, setRestored] = useState(false) // the first look at the saved job is over
   const [busy, setBusy] = useState(false)
   const [fileName, setFileName] = useState('')
   const [error, setError] = useState(null)
@@ -67,22 +43,8 @@ export default function LectureApp() {
   const jobId = job?.id
   const finished = job && (job.status === 'done' || job.status === 'error')
   const lost = failures >= LOST_AFTER
-  const restoring = Boolean(savedId) && !job && !restored
   // The server is slow to answer: asleep (free plan) or still starting. Shown after 6 s of waiting, or as soon as a poll fails.
   const waking = useAfter(busy, 6000) || (Boolean(jobId) && !finished && failures > 0)
-
-  // Come back to a job after a page reload.
-  useEffect(() => {
-    if (!savedId) return
-    let cancelled = false
-    getJob(savedId)
-      .then((saved) => !cancelled && dispatch({ type: 'job', job: saved, at: Date.now() }))
-      .catch(() => !cancelled && remember(null))
-      .finally(() => !cancelled && setRestored(true))
-    return () => {
-      cancelled = true
-    }
-  }, [savedId])
 
   // Ask for the job until it is done or failed, then stop.
   useEffect(() => {
@@ -138,13 +100,6 @@ export default function LectureApp() {
     setFailures(0)
   }
 
-  if (restoring) {
-    return (
-      <Column>
-        <Loading />
-      </Column>
-    )
-  }
   if (job && job.status === 'done') {
     return (
       <Column>
@@ -189,6 +144,7 @@ export default function LectureApp() {
           <p className="hero-note">
             <strong>Source-checked</strong> means the cited source supports the statement. It does not check that the source itself is true.
           </p>
+          <ResumeLink />
         </div>
         <div className="story-hero-art">
           <span className="story-sticker hero-sticker" aria-hidden="true">
