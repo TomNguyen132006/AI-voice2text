@@ -49,7 +49,7 @@ function ExampleJob({ example }) {
         message="The file could not be read. Check your connection and try again."
         onRetry={() => window.location.reload()}
         retryLabel="Reload"
-        onSecondary={() => router.push('/app/library')}
+        onSecondary={() => router.replace('/app/library')}
         secondaryLabel="Back to library"
       />
     )
@@ -92,6 +92,14 @@ function LiveJob({ id }) {
     }
   }, [id, finished, missing, lost, tick])
 
+  // A lecture the server no longer has must not stay as the "last lecture" of the Resume link.
+  useEffect(() => {
+    if (!missing) return
+    try {
+      if (localStorage.getItem('voice2text.jobId') === id) localStorage.removeItem('voice2text.jobId')
+    } catch {}
+  }, [missing, id])
+
   // Keep the library row up to date (status and counts), so it can still say something after the server forgets the job.
   const status = job?.status
   const sectionCount = job?.sections?.length
@@ -108,7 +116,7 @@ function LiveJob({ id }) {
         message="The server may have restarted and lost this lecture. Upload the file again to get new notes."
         onRetry={() => router.push('/app/new')}
         retryLabel="New lecture"
-        onSecondary={() => router.push('/app/library')}
+        onSecondary={() => router.replace('/app/library')}
         secondaryLabel="Back to library"
       />
     )
@@ -126,7 +134,7 @@ function LiveJob({ id }) {
             setFailures(0)
             setTick((n) => n + 1)
           }}
-          onSecondary={() => router.push('/app/library')}
+          onSecondary={() => router.replace('/app/library')}
           secondaryLabel="Back to library"
         />
       )}

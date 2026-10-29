@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { clock, duration, fileUrl, getStats, zipUrl } from '../lib/api'
 import { JudgeBadge, LectureChip, WebChip } from './Chips'
 import StatsPanel from './StatsPanel'
@@ -98,6 +98,17 @@ function DownloadButton({ label, path, example, filename }) {
   )
 }
 
+// The original audio of a pre-generated example. preload="none": nothing is downloaded until someone plays it.
+function LecturePlayer({ audioRef, src, credit }) {
+  return (
+    <div className="story-panel flex flex-col gap-3 !p-5">
+      <p className="story-label text-muted-foreground">Original lecture audio (excerpt)</p>
+      <audio ref={audioRef} controls preload="none" src={src} className="block w-full max-w-full" />
+      <p className="text-sm text-muted-foreground">{credit}</p>
+    </div>
+  )
+}
+
 // example: a pre-generated example (frontend/public/examples), opened without the backend: static files, no stats request.
 export default function ResultsView({ job, onReset, example }) {
   const [stats, setStats] = useState(example ? null : undefined) // undefined: loading, null: none
@@ -111,6 +122,22 @@ export default function ResultsView({ job, onReset, example }) {
       cancelled = true
     }
   }, [job.id, example])
+
+  // A lecture chip on an example plays the audio from its time. The file may not be loaded yet (preload="none"): load it first.
+  const audio = useRef(null)
+  const seek = useCallback((seconds) => {
+    const el = audio.current
+    if (!el) return
+    const go = () => {
+      el.currentTime = seconds
+      el.play().catch(() => {})
+    }
+    if (el.readyState >= 1) go()
+    else {
+      el.addEventListener('loadedmetadata', go, { once: true })
+      el.load()
+    }
+  }, [])
 
   const kinds = useMemo(() => judgeKinds(stats, job.statements), [stats, job.statements])
   const groups = (job.sections.length ? job.sections : [{ id: 'all', title: 'Notes', start: 0, end: 0 }])
@@ -134,9 +161,9 @@ export default function ResultsView({ job, onReset, example }) {
         {example && (
           <div role="note" className="flex flex-col gap-1 rounded-2xl bg-accent px-4 py-3 text-accent-foreground">
             <p className="font-semibold">This is a pre-generated example, not a live run.</p>
-            <p>{example.credit}</p>
           </div>
         )}
+        {example && <LecturePlayer audioRef={audio} src={`${example.files}/lecture.mp3`} credit={example.credit} />}
         <Summary job={job} sectionCount={groups.length} />
         <div>
           <h3 className="sr-only">Downloads</h3>
@@ -181,7 +208,7 @@ export default function ResultsView({ job, onReset, example }) {
                 <p className="text-[18px] leading-[1.7] text-foreground">{note.text}</p>
                 <div className="flex flex-wrap items-center gap-2">
                   {note.sources.map((source, i) =>
-                    source.type === 'web' ? <WebChip key={`${note.id}-${i}`} source={source} /> : <LectureChip key={`${note.id}-${i}`} source={source} />,
+                    source.type === 'web' ? <WebChip key={`${note.id}-${i}`} source={source} /> : <LectureChip key={`${note.id}-${i}`} source={source} onSeek={example ? seek : undefined} />,
                   )}
                   {kinds[note.id] && <JudgeBadge kind={kinds[note.id]} />}
                 </div>

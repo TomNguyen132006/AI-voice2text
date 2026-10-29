@@ -6,6 +6,7 @@ import { createJob, createSampleJob, describeError } from '../lib/api'
 import { useAfter } from '../lib/hooks'
 import { addRecent } from '../lib/recent'
 import ErrorNotice from './ErrorNotice'
+import ResumeLink from './ResumeLink'
 import UploadBox from './UploadBox'
 
 // The old key, still written so that the start page (/) can bring the last job back after a reload.
@@ -31,7 +32,7 @@ export default function NewLecture() {
       try {
         localStorage.setItem(LAST_JOB_KEY, created.id)
       } catch {}
-      router.push(`/app/job/${encodeURIComponent(created.id)}`)
+      router.replace(`/app/job/${encodeURIComponent(created.id)}`) // replace: Back from the job must not return to a submitted form
     } catch (e) {
       setError(describeError(e))
       setBusy(false)
@@ -43,6 +44,7 @@ export default function NewLecture() {
       <div>
         <p className="handwritten">notes with receipts ✦</p>
         <h2 className="text-4xl leading-tight">New lecture</h2>
+        <ResumeLink className="mt-2" />
       </div>
       <div className="story-panel">
         <UploadBox
