@@ -195,12 +195,12 @@ def test_speaker_notes_keep_the_slide_notes_with_sources_untouched_when_everythi
 def test_title_slide_numbers():
     statements = [st(1), st(2), st(3)]
     status = {"st_0001": "source-checked", "st_0002": "rewritten", "st_0003": "not judged"}
-    prs, _ = build([make(statements)], title="CSC 335 databases", statements=statements, sections=SECTIONS, status=status, judged=True)
+    prs, _ = build([make(statements)], title="Databases 101", statements=statements, sections=SECTIONS, status=status, judged=True)
     text = slide_text(prs.slides[0])
-    assert "CSC 335 databases" in text
+    assert "Databases 101" in text
     assert "1 section - 3 statements - 2 source-checked by the judge" in text
     assert "Built with Nemotron on Nebius Token Factory. Every statement cites a lecture time or a web link." in text
-    assert prs.slides[0].shapes.title.text == "CSC 335 databases"
+    assert prs.slides[0].shapes.title.text == "Databases 101"
     assert "Lecturesque" in text and prs.core_properties.author == "Lecturesque"
 
 

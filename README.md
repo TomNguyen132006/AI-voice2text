@@ -2,22 +2,69 @@
 
 Turn a lecture into notes and slides where every line cites a lecture timestamp or a web link, then gets checked against that source.
 
-Turn a lecture recording into trustworthy study materials.
+[Live app](https://ai-voice2text.vercel.app) | [Demo video](<DEMO_VIDEO_URL>) | [License (MIT)](LICENSE)
 
-Upload a lecture recording. The app transcribes it with **NVIDIA Parakeet**, uses
-**NVIDIA Nemotron** models on **Nebius Token Factory** to clean it, split it by topic
-and add supporting knowledge from the web, then produces study notes (.md), slides
-(.pptx) and a timestamped transcript (.txt). A judge model checks that every
-statement has a source (a lecture timestamp or a web link) and does not contradict
-the lecture.
+## What it does
 
-Built for the Nebius x NVIDIA Global AI Hackathon (track: Best Apps and Agents).
+- Takes a lecture transcript (`.txt`, `.srt`, `.vtt`) in, or a recording when run locally with a GPU.
+- Writes study notes (`.md`) where every point cites a lecture timestamp or a web link.
+- Builds slides (`.pptx`) and a timestamped transcript (`.txt`), or all three in one `.zip`.
+- A judge model checks that every statement is supported by its source and does not contradict the lecture.
+
+## How it works
+
+```
+Parakeet (local GPU)  ->  Nemotron Nano   (clean, split by topic)
+                      ->  Nemotron Super  (find gaps, write notes, slides)
+                      ->  Tavily          (web search for the gaps)
+                      ->  Nemotron Ultra  (judge, fixer)
+                      ->  .txt / .md / .pptx
+```
+
+Nebius Token Factory runs all the language-model calls (Nano, Super, Ultra).
+
+## Audio vs transcript
+
+- The deployed demo takes transcripts (`.txt`, `.srt`, `.vtt`) only.
+- Audio works locally with an NVIDIA GPU (Parakeet needs NeMo and CUDA).
+- Details: [Run locally with audio (GPU) vs deployed (transcript only)](#run-locally-with-audio-gpu-vs-deployed-transcript-only).
+
+## Quick start
+
+```bash
+cp .env.example .env            # then paste your own keys into .env (never commit it)
+cd backend
+python -m venv .venv            # Windows: .venv\Scripts\activate   macOS/Linux: source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn main:app --reload       # http://127.0.0.1:8000
+# in a second terminal:
+cd frontend && npm install && npm run dev   # http://localhost:3000
+```
+
+Needs Node.js 20.9+, Python 3.12 and a Nebius Token Factory key (and a Tavily key for web search). `ffmpeg` is only needed for audio. Full steps: [Setup](#setup).
+
+## Honest limits
+
+- **"Source-checked" means the cited source supports the statement.** It does not mean the source is true.
+- **Speech-recognition errors pass through the judge.** It compares statements with the transcript, not the audio; the timestamp lets a person re-listen.
+- **The app hears the lecture but does not see it.** Slides and diagrams shown in the room are not in the transcript.
+- **Light mode (`PIPELINE_MODE=light`) is "not judged".** It skips web search and the judge, and the files say so.
+- **The Nebius trial credit ends in early November,** so the live demo may be down after that.
+
+## Cost
+
+- Full pipeline: about $0.011 per lecture minute.
+- Light mode: about $0.0023 per lecture minute (from our call logs).
+
+Built for the Nebius x NVIDIA Global AI Hackathon. Full development log below.
+
+# Development log
 
 ## Status (checked Oct 27, 2026; Oct 28 additions are marked)
 
 Labels: **PROVEN LIVE** = run with the real models, search API or server and the result was checked; **ONLY MOCKS** = tests with fake clients only;
-**NOT TESTED** = not run at all; **BROKEN** = fails. "One job" = `job_013207f9ae93`, a 4.4-minute lecture excerpt uploaded as `.srt` through `POST /jobs` on a local
-backend (250 s, $0.044, 19 model calls, 9 Tavily searches). A second real job, `job_4423c587753f` (CSC 335 "Data Models", 4.4 minutes, uploaded as `.srt`,
+**NOT TESTED** = not run at all; **BROKEN** = fails. "One job" = a 4.4-minute lecture excerpt uploaded as `.srt` through `POST /jobs` on a local
+backend (250 s, $0.044, 19 model calls, 9 Tavily searches). A second real job (a university database course, 4.4 minutes, uploaded as `.srt`,
 local backend, Oct 28), ran with the new slide rule and the new limits code: 415 s, $0.0588 ($0.0133 per minute of lecture), 20 statements, 10 Tavily searches.
 
 | Epic | What | Status | Evidence and what is not covered |
@@ -26,7 +73,7 @@ local backend, Oct 28), ran with the new slide rule and the new limits code: 415
 | 1 Transcription | Parakeet, transcript upload | PROVEN LIVE (local GPU only) | Parakeet ran on a local RTX 4060 (Oct 8, see "Parakeet local test environment"); not re-run on Oct 27. `.srt` import checked on one job: 36 cues, times and text identical to the source. The 60-minute audio test (S1-2) is NOT TESTED. |
 | 2 Model layer, cleaning, topic split | `llm.py`, `clean.py`, `topics.py` | PROVEN LIVE | Two real jobs. One Nano cleaning call was cut off at 20000 tokens and retried (118 s). |
 | 3 Enrichment | gap finder, web search | PROVEN LIVE | 9 Tavily searches, 0 errors. The 429/5xx paths are ONLY MOCKS. |
-| 4 Notes and slides | `notes.py`, `slides.py`, `check_sources.py` | PROVEN LIVE | Three real jobs. Slides (rule since Oct 28): the bullets are all statements of the section except the example, in lecture order, at most 7 and at most 700 characters of text; the rest goes to speaker notes, each with its sources. The model only chooses the title and the example id. It ran live once on this rule (`job_4423c587753f`: 2 slides, 5 bullets and an example each, `check_sources` all passed). |
+| 4 Notes and slides | `notes.py`, `slides.py`, `check_sources.py` | PROVEN LIVE | Three real jobs. Slides (rule since Oct 28): the bullets are all statements of the section except the example, in lecture order, at most 7 and at most 700 characters of text; the rest goes to speaker notes, each with its sources. The model only chooses the title and the example id. It ran live once on this rule (2 slides, 5 bullets and an example each, `check_sources` all passed). |
 | 5 Judge | `judge.py`, `fix.py` | PROVEN LIVE (one run) | Ultra judged 57 statements in three jobs (48 pass, 9 unsupported). One unsupported statement was rewritten once and passed; in the Oct 28 job all 5 unsupported statements were rewritten once, passed the second check and were kept (0 dropped). Code checks (`no_source`, `bad_source`, `unknown_url`) and the drop paths are ONLY MOCKS. The judge has no "weakly supported / speech recognition difference" level. |
 | 6 Output files | `.txt`, `.md`, `.pptx`, `.zip` | PROVEN LIVE (`.txt`, `.md`, `.pptx` rendered in PowerPoint); NOT TESTED (`.pptx` in Google Slides) | Oct 28: the decks of three saved jobs and a stress deck were opened in PowerPoint and exported as slide images; text fit was checked by eye on those. Tests read the file back with python-pptx. |
 | 7 Frontend and Job API | pipeline, `/jobs` API, Next.js page | PROVEN LIVE (pipeline and API, local); NOT TESTED (page in a browser, Job API on Render) | Every endpoint answered as expected on a local backend. `npm run build` and `eslint` pass. |
@@ -37,7 +84,7 @@ local backend, Oct 28), ran with the new slide rule and the new limits code: 415
 - Audio works only on a local GPU machine (Parakeet needs NeMo and an NVIDIA GPU). The deployed backend has no GPU engine and accepts transcripts only (`.txt`, `.srt`, `.vtt`).
 - The judge evidence is three jobs (57 statements), no repeat of the same job, and no comparison with a human check beyond reading 5 statements of the Oct 28 job against their segments and snippets (all 5 supported).
 - **The judge accepts a few details beyond a snippet or segment.** Examples from reading statements (Oct 28): "a sequence of operations treated as a single unit" where the snippet only says that all operations complete or none do; "(family members covered by benefits)" added after "dependents" where neither the segment nor the snippet says it. The judge also let a vague rewrite through once ("there was a problem that was not easy to do"); the fixer prompt now allows dropping such a statement.
-- **One-run evidence.** The numbers of the Oct 28 prompt changes come from one rerun of one lecture (`job_125c_rerun`, a copy of the 6.4-minute Introduction job); nothing was repeated and no human compared the results.
+- **One-run evidence.** The numbers of the Oct 28 prompt changes come from one rerun of one lecture (a copy of the 6.4-minute Introduction job); nothing was repeated and no human compared the results.
 - **"Source-checked" means the cited lecture text or web snippet supports the statement; it does not check the speech recognition itself.** The deck tags and the results page use this word for a statement the judge accepted against its sources.
 - **Speech recognition errors pass through the judge.** Parakeet can write a wrong word (for example "row or tuple" written as "raw or topel"; this reached a slide in the Oct 28 job). The judge compares each statement with the transcript, not with the audio, so it cannot see the error. The timestamp on every statement lets a person re-listen.
 - Jobs and files are lost when the Render instance restarts or sleeps, unless S3 storage is configured (not tested).
@@ -636,7 +683,7 @@ a lower bound, because 2 timed-out cleaning attempts have no cost. Tavily is not
 
 **Output files (`backend/export.py`, S6-1..S6-4).** Built by code only, no model call: `transcript.txt` (cleaned transcript, `[mm:ss]` per segment), `notes.md` (the statements that survived the judge, grouped by section, every point ends with 📍 lecture time range and 🌐 web link), `slides.pptx` (python-pptx, drawn by `backend/deck.py`, 16:9, Georgia and Calibri, no extra dependency: a navy title slide with the section, statement and "source-checked by the judge" counts, one slide per section with a time-range chip, the bullets each followed by its source line (lecture time ranges, web title and domain as a hyperlink with the exact url) and a tag "source-checked" / "rewritten" / "not judged" from `judge.json` and `fix_log.json`, an "EXAMPLE" box, speaker notes with the sources of every statement, and a two-column "Sources" slide: lecture time ranges per section and all web links of the job). The lecture title is not stored anywhere, so the title slide says "Lecture notes". Text is measured with an average character width, not rendered: if the bullets of a slide do not fit, the last ones move to the speaker notes and a warning goes to `pipeline_report.json`. Checked by opening the decks of three saved jobs in PowerPoint (slide images, Oct 28); Google Slides was not checked), and one `.zip` with the three files (built on download). Run: `python -m export <job_id>`. Tested by reading the files back with `python-pptx`; **not yet opened in real PowerPoint or Google Slides** (S6-3 asks for that).
 
-**Pipeline (`backend/pipeline.py`, S7-7).** `run_pipeline` runs transcribe (or a .txt/.srt/.vtt upload) -> clean -> split -> gaps -> web search -> notes -> judge + fix -> slides -> export, and writes `jobs/{id}/job.json` after every stage (`transcribing, cleaning, enriching, writing, judging, exporting`). The slides are built from `notes_final.json`, so only statements the judge kept reach the slides. A failing stage makes the job `error` with `"<stage>: <message>"` (keys scrubbed, 300 characters at most). A failing web search is only a warning (the notes then rest on the lecture alone). `pipeline_report.json` has seconds per stage, warnings and the model-call totals. Tested end to end with a fake model that answers every stage; run with the real models in two jobs (Oct 27 `job_013207f9ae93`, 250 s, $0.044; Oct 28 `job_4423c587753f`, 415 s, $0.0588).
+**Pipeline (`backend/pipeline.py`, S7-7).** `run_pipeline` runs transcribe (or a .txt/.srt/.vtt upload) -> clean -> split -> gaps -> web search -> notes -> judge + fix -> slides -> export, and writes `jobs/{id}/job.json` after every stage (`transcribing, cleaning, enriching, writing, judging, exporting`). The slides are built from `notes_final.json`, so only statements the judge kept reach the slides. A failing stage makes the job `error` with `"<stage>: <message>"` (keys scrubbed, 300 characters at most). A failing web search is only a warning (the notes then rest on the lecture alone). `pipeline_report.json` has seconds per stage, warnings and the model-call totals. Tested end to end with a fake model that answers every stage; run with the real models in two jobs (Oct 27, 250 s, $0.044; Oct 28, 415 s, $0.0588).
 
 **Job API (`backend/jobs_api.py`, S7-2).** Same format as the old mock (`mock_jobs.py` is kept but no longer mounted); `JobResponse` got two optional fields, `sections` and `summary`.
 `POST /jobs` (multipart `file`; audio/video or .txt/.srt/.vtt, max `MAX_UPLOAD_MB`=10 and the other limits in "Run locally with audio (GPU) vs deployed (transcript only)"; the pipeline runs as a FastAPI background task, the planned fallback to Nebius Serverless Jobs), `GET /jobs/{id}`, `GET /jobs/{id}/files/{transcript.txt|notes.md|slides.pptx|all.zip}`, and `POST /jobs/sample`.
