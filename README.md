@@ -48,7 +48,8 @@ Needs Node.js 20.9+, Python 3.12 and a Nebius Token Factory key (and a Tavily ke
 - **"Source-checked" means the cited source supports the statement.** It does not mean the source is true.
 - **Speech-recognition errors pass through the judge.** It compares statements with the transcript, not the audio; the timestamp lets a person re-listen.
 - **The app hears the lecture but does not see it.** Slides and diagrams shown in the room are not in the transcript.
-- **Light mode (`PIPELINE_MODE=light`) is "not judged".** It skips web search and the judge, and the files say so.
+- **Light mode is "not judged".** Set the env var `PIPELINE_MODE=light` (default: `full`) to skip gaps, web search, judge and fixer;
+  the output files then say "not judged".
 - **The Nebius trial credit ends in early November,** so the live demo may be down after that.
 
 ## Cost
@@ -56,7 +57,7 @@ Needs Node.js 20.9+, Python 3.12 and a Nebius Token Factory key (and a Tavily ke
 - Full pipeline: about $0.011 per lecture minute.
 - Light mode: about $0.0023 per lecture minute (from our call logs).
 
-Built for the Nebius x NVIDIA Global AI Hackathon. Full development log below.
+Built for the Nebius x NVIDIA Global AI Hackathon. Track: Best Apps and Agents. Full development log below.
 
 # Development log
 
