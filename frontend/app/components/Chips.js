@@ -23,15 +23,19 @@ function LinkIcon() {
 }
 
 // A moment in the lecture. Click to see the whole time range and the transcript segment it comes from.
-export function LectureChip({ source }) {
+// onSeek (only on a pre-generated example, which has the lecture audio): the click also plays the audio from this moment.
+export function LectureChip({ source, onSeek }) {
   const [open, setOpen] = useState(false)
   return (
     <span className="inline-flex flex-wrap items-center gap-2">
       <button
         type="button"
-        onClick={() => setOpen((value) => !value)}
+        onClick={() => {
+          setOpen((value) => !value)
+          if (onSeek) onSeek(source.start)
+        }}
         aria-expanded={open}
-        aria-label={`Lecture at ${clock(source.start)}, show details`}
+        aria-label={onSeek ? `Play the lecture audio from ${clock(source.start)}, and show details` : `Lecture at ${clock(source.start)}, show details`}
         className={`${chip} cursor-pointer bg-accent text-accent-foreground hover:brightness-95`}
       >
         <ClockIcon />

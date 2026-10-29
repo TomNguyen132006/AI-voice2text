@@ -41,3 +41,6 @@ nemo_experiments/
 
 # Local job storage (S1-4, STORAGE_BACKEND=local)
 .data/
+
+# The one public example clip (MIT OpenCourseWare excerpt) ships with the site; every other audio file stays ignored
+!frontend/public/examples/**/*.mp3
