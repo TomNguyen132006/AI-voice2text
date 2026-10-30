@@ -1,133 +1,48 @@
 'use client'
 
-import { useCallback, useEffect, useReducer, useState } from 'react'
-import { createJob, createSampleJob, describeError, describeJobFailure, getJob } from '../lib/api'
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { useState } from 'react'
+import { createSampleJob, describeError } from '../lib/api'
 import { useAfter } from '../lib/hooks'
-import { jobReducer as reducer } from '../lib/jobReducer'
 import { addRecent } from '../lib/recent'
 import ErrorNotice from './ErrorNotice'
-import ProgressView from './ProgressView'
-import ResultsView from './ResultsView'
-import ResumeLink from './ResumeLink'
 import { HowItWorks, Values } from './Landing'
-import UploadBox from './UploadBox'
+import ResumeLink from './ResumeLink'
 
-const POLL_MS = 2000
-const LOST_AFTER = 8 // this many failed polls in a row: say that the server cannot be reached
-const STORAGE_KEY = 'voice2text.jobId'
+// The old key, still written so the "Resume your last lecture" link has something to point at.
+const LAST_JOB_KEY = 'voice2text.jobId'
 
-function remember(id) {
-  try {
-    if (id) localStorage.setItem(STORAGE_KEY, id)
-    else localStorage.removeItem(STORAGE_KEY)
-  } catch {}
-}
-
-// A job (running, failed or done) lives in one calm column; the start page has the hero.
-function Column({ children }) {
+function Arrow() {
   return (
-    <main id="story-main" tabIndex={-1} className="story-column py-8 pb-16">
-      {children}
-    </main>
+    <svg aria-hidden viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M5 12h14M13 6l6 6-6 6" />
+    </svg>
   )
 }
 
+// The start page. Nothing is uploaded here: the upload lives at /app/new, a job at /app/job/[id].
 export default function LectureApp() {
-  const [{ job, log }, dispatch] = useReducer(reducer, { job: null, log: {} })
+  const router = useRouter()
   const [busy, setBusy] = useState(false)
-  const [fileName, setFileName] = useState('')
   const [error, setError] = useState(null)
-  const [lastAction, setLastAction] = useState(null) // what "Try again" repeats
-  const [failures, setFailures] = useState(0)
-  const [tick, setTick] = useState(0) // "Try again" while the server cannot be reached
-  const jobId = job?.id
-  const finished = job && (job.status === 'done' || job.status === 'error')
-  const lost = failures >= LOST_AFTER
-  // The server is slow to answer: asleep (free plan) or still starting. Shown after 6 s of waiting, or as soon as a poll fails.
-  const waking = useAfter(busy, 6000) || (Boolean(jobId) && !finished && failures > 0)
+  const waking = useAfter(busy, 6000)
 
-  // Ask for the job until it is done or failed, then stop.
-  useEffect(() => {
-    if (!jobId || finished) return
-    let cancelled = false
-    async function poll() {
-      try {
-        const latest = await getJob(jobId)
-        if (cancelled) return
-        dispatch({ type: 'job', job: latest, at: Date.now() })
-        setFailures(0)
-      } catch (e) {
-        if (cancelled) return
-        if (e.status === 404) {
-          remember(null)
-          dispatch({ type: 'reset' })
-          setError(describeError(e))
-        } else {
-          setFailures((n) => n + 1)
-        }
-      }
-    }
-    poll()
-    const timer = setInterval(poll, lost ? POLL_MS * 3 : POLL_MS)
-    return () => {
-      cancelled = true
-      clearInterval(timer)
-    }
-  }, [jobId, finished, lost, tick])
-
-  const start = useCallback(async (create, name = '') => {
-    setLastAction({ create, name })
-    setFileName(name)
+  // The sample: same API call as before. replace, so browser Back from the job does not come back to this click.
+  async function trySample() {
     setBusy(true)
     setError(null)
-    setFailures(0)
     try {
-      const created = await create()
-      remember(created.id)
-      addRecent({ id: created.id, name: name || 'Sample (hand-written)' })
-      dispatch({ type: 'job', job: created, at: Date.now() })
+      const created = await createSampleJob()
+      addRecent({ id: created.id, name: 'Sample (hand-written)' })
+      try {
+        localStorage.setItem(LAST_JOB_KEY, created.id)
+      } catch {}
+      router.replace(`/app/job/${encodeURIComponent(created.id)}`)
     } catch (e) {
       setError(describeError(e))
-    } finally {
       setBusy(false)
     }
-  }, [])
-
-  function reset() {
-    remember(null)
-    dispatch({ type: 'reset' })
-    setError(null)
-    setFailures(0)
-  }
-
-  if (job && job.status === 'done') {
-    return (
-      <Column>
-        <ResultsView job={job} onReset={reset} />
-      </Column>
-    )
-  }
-
-  if (job) {
-    return (
-      <Column>
-        <div className="flex flex-col gap-6">
-          <ProgressView job={job} log={log} waking={waking} />
-          {job.status === 'error' && <ErrorNotice {...describeJobFailure(job)} onRetry={reset} />}
-          {lost && job.status !== 'error' && (
-            <ErrorNotice
-              {...describeError({ kind: 'network' })}
-              onRetry={() => {
-                setFailures(0)
-                setTick((n) => n + 1)
-              }}
-              onSecondary={reset}
-              secondaryLabel="Start over"
-            />
-          )}
-        </div>
-      </Column>
-    )
   }
 
   return (
@@ -138,9 +53,7 @@ export default function LectureApp() {
           <h1 id="hero-title">
             Your lecture, turned into notes <span className="marker">you can check.</span>
           </h1>
-          <p className="story-lede">
-            Upload a lecture transcript or recording. You get notes, slides and sources, with every line tied to a timestamp or a link.
-          </p>
+          <p className="story-lede">Upload a lecture transcript. You get notes, slides and sources, with every line tied to a timestamp or a link.</p>
           <p className="hero-note">
             <strong>Source-checked</strong> means the cited source supports the statement. It does not check that the source itself is true.
           </p>
@@ -151,23 +64,33 @@ export default function LectureApp() {
             source-checked
           </span>
           <div className="story-panel">
-            <UploadBox
-              busy={busy}
-              fileName={fileName}
-              waking={waking && busy}
-              onFile={(file) => start(() => createJob(file), file.name)}
-              onSample={() => start(createSampleJob)}
-              notice={
-                error && (
-                  <ErrorNotice
-                    {...error}
-                    onRetry={lastAction ? () => start(lastAction.create, lastAction.name) : reset}
-                    onSecondary={lastAction ? reset : undefined}
-                    secondaryLabel="Start over"
-                  />
-                )
-              }
-            />
+            <section aria-labelledby="start-heading" className="flex flex-col gap-5">
+              <div>
+                <p className="story-label text-muted-foreground">START HERE</p>
+                <h2 id="start-heading" className="sr-only">
+                  Start
+                </h2>
+              </div>
+              <Link href="/app/new" className="story-button story-button-coral w-full !min-h-[60px] text-lg">
+                Start your own lecture
+                <Arrow />
+              </Link>
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <Link href="/app/job/example-strang" className="story-button story-button-outline story-button-small w-full sm:w-auto">
+                  See an example
+                </Link>
+                <button type="button" onClick={trySample} disabled={busy} className="story-button story-button-outline story-button-small w-full sm:w-auto">
+                  {busy ? 'Opening the sample…' : 'Try the sample'}
+                </button>
+              </div>
+              {busy && waking && (
+                <p role="status" className="rounded-2xl bg-accent px-4 py-3 text-accent-foreground">
+                  The server is waking up. On the free plan the first request can take about 30 seconds.
+                </p>
+              )}
+              {error && <ErrorNotice {...error} onRetry={trySample} onSecondary={() => setError(null)} secondaryLabel="Dismiss" />}
+              <p className="text-[15px] text-muted-foreground">Transcripts (.txt, .srt, .vtt). Audio needs a local GPU.</p>
+            </section>
           </div>
         </div>
       </section>

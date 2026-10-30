@@ -4,7 +4,7 @@ import AppShell from '../components/AppShell'
 
 export const metadata = {
   title: 'Lecturesque app: your lectures and notes',
-  description: 'Your recent lectures, a new upload, and pre-generated examples. No account needed.',
+  description: 'Your recent lectures, a new upload, and pre-generated examples.',
 }
 
 // usePathname() in the shell needs a Suspense boundary because /app/job/[id] has no fixed id at build time.

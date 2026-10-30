@@ -19,11 +19,11 @@ export function Nav() {
         Lecturesque
       </Link>
       <nav aria-label="Main navigation">
-        <Link href="/#how" className="nav-link">
+        <Link href="/#how" className="nav-link nav-how">
           How it works
         </Link>
-        <Link href="/app/library" className="story-button story-button-forest story-button-small nav-open">
-          Open the app
+        <Link href="/app/library" className="nav-link">
+          Library
         </Link>
         <ThemeToggle />
       </nav>

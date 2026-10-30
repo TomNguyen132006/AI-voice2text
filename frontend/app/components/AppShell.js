@@ -58,7 +58,7 @@ function Logo({ onClick }) {
   )
 }
 
-// The app: a sidebar on a computer, a top bar with a drawer on a phone. No account, no login.
+// The app: a sidebar on a computer, a top bar with a drawer on a phone.
 export default function AppShell({ children }) {
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
@@ -136,7 +136,7 @@ export default function AppShell({ children }) {
             </Link>
           ))}
         </nav>
-        <p className="shell-note">No account. Your list of lectures stays in this browser.</p>
+        <p className="shell-note">Your list of lectures stays in this browser.</p>
       </aside>
       <main id="story-main" tabIndex={-1} className="shell-main">
         <div className="shell-content">
