@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
 import BackLink from './BackLink'
+import ThemeToggle from './ThemeToggle'
 
 const icon = { 'aria-hidden': true, viewBox: '0 0 24 24', width: 20, height: 20, fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round', strokeLinejoin: 'round' }
 
@@ -61,7 +62,10 @@ function Logo({ onClick }) {
 // The app: a sidebar on a computer, a top bar with a drawer on a phone.
 export default function AppShell({ children }) {
   const pathname = usePathname()
-  const [open, setOpen] = useState(false)
+  // The drawer is open only for the page it was opened on: any navigation closes it, with no effect needed.
+  const [openPath, setOpenPath] = useState(null)
+  const open = openPath === pathname
+  const setOpen = (value) => setOpenPath(value ? pathname : null)
   const menuButton = useRef(null)
   const drawer = useRef(null)
 
@@ -81,7 +85,7 @@ export default function AppShell({ children }) {
     drawer.current?.querySelector('a')?.focus()
     function onKey(event) {
       if (event.key === 'Escape') {
-        setOpen(false)
+        setOpenPath(null)
         menuButton.current?.focus()
       }
       if (event.key === 'Tab' && drawer.current) {
@@ -106,27 +110,11 @@ export default function AppShell({ children }) {
       <a href="#story-main" className="story-skip">
         Skip to content
       </a>
-      <header className="shell-top">
-        <div className="shell-top-left">
-          <BackLink pathname={pathname} />
-          <Logo />
-        </div>
-        <button
-          ref={menuButton}
-          type="button"
-          className="theme-toggle"
-          aria-label={open ? 'Close the menu' : 'Open the menu'}
-          aria-expanded={open}
-          aria-controls="shell-drawer"
-          onClick={() => setOpen((value) => !value)}
-        >
-          <svg {...icon}>{open ? <path d="M6 6l12 12M18 6L6 18" /> : <path d="M4 7h16M4 12h16M4 17h16" />}</svg>
-        </button>
-      </header>
       {open && <div className="shell-scrim" onClick={close} aria-hidden="true" />}
       <aside id="shell-drawer" ref={drawer} className="shell-side" data-open={open}>
         <div className="shell-brand">
           <Logo onClick={() => setOpen(false)} />
+          <p className="handwritten shell-workspace">workspace</p>
         </div>
         <nav aria-label="App" className="shell-nav">
           {ITEMS.map((item) => (
@@ -136,15 +124,58 @@ export default function AppShell({ children }) {
             </Link>
           ))}
         </nav>
-        <p className="shell-note">Your list of lectures stays in this browser.</p>
-      </aside>
-      <main id="story-main" tabIndex={-1} className="shell-main">
-        <div className="shell-content">
-          <BackLink pathname={pathname} className="shell-back-desktop" />
-          <h1 className="sr-only">{pageTitle}</h1>
-          {children}
+        <div className="shell-card">
+          <p className="shell-card-title">Every line has a receipt.</p>
+          <p>Notes cite a lecture timestamp or a web link.</p>
+          <Link href="/app/how" className="story-link" onClick={() => setOpen(false)}>
+            How it works
+          </Link>
         </div>
-      </main>
+      </aside>
+      <div className="shell-col">
+        <header className="shell-top">
+          <div className="shell-top-left">
+            <button
+              ref={menuButton}
+              type="button"
+              className="theme-toggle shell-menu"
+              aria-label={open ? 'Close the menu' : 'Open the menu'}
+              aria-expanded={open}
+              aria-controls="shell-drawer"
+              onClick={() => setOpen(!open)}
+            >
+              <svg {...icon}>{open ? <path d="M6 6l12 12M18 6L6 18" /> : <path d="M4 7h16M4 12h16M4 17h16" />}</svg>
+            </button>
+            <span className="shell-top-logo">
+              <Logo />
+            </span>
+            <nav aria-label="Breadcrumb" className="shell-crumbs">
+              <span>Workspace</span>
+              <span aria-hidden="true">/</span>
+              <span aria-current="page">{pageTitle}</span>
+            </nav>
+          </div>
+          <div className="shell-top-right">
+            <span className="shell-built">
+              <span aria-hidden="true" />
+              Built on NVIDIA Nemotron + Nebius
+            </span>
+            <ThemeToggle />
+          </div>
+        </header>
+        {pathname === '/app/library' && (
+          <p role="note" className="shell-notice">
+            Examples are pre-generated. Your own lectures stay in this browser; there is no account.
+          </p>
+        )}
+        <main id="story-main" tabIndex={-1} className="shell-main">
+          <div className="shell-content">
+            <BackLink pathname={pathname} className="shell-back-desktop" />
+            <h1 className="sr-only">{pageTitle}</h1>
+            {children}
+          </div>
+        </main>
+      </div>
     </div>
   )
 }

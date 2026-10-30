@@ -19,7 +19,7 @@ function Example({ example }) {
       <div className="lib-row-main">
         <div className="badges">
           <span className="badge badge-sticker">Pre-generated example</span>
-          {!example.judged && <span className="badge badge-peach">Not judged</span>}
+          {example.judged ? <span className="badge">Source-checked</span> : <span className="badge badge-peach">Not judged</span>}
         </div>
         <h4 className="lib-row-title">{example.title}</h4>
         <p className="lib-meta">{[counts(example.sections, example.notes), example.credit].filter(Boolean).join(' · ')}</p>
@@ -27,8 +27,8 @@ function Example({ example }) {
           <p className="lib-meta">This run had no judge step, so its notes are not source-checked.</p>
         )}
       </div>
-      <Link href={`/app/job/${example.id}`} className="story-button story-button-forest story-button-small w-full sm:w-auto">
-        Open example
+      <Link href={`/app/job/${example.id}`} className="story-button story-button-forest story-button-small w-full">
+        Open
       </Link>
     </li>
   )
@@ -59,7 +59,7 @@ function Row({ entry, live }) {
         {offline && <p className="lib-meta">Can&apos;t reach the server right now. The numbers above may be old.</p>}
       </div>
       {!expired && (
-        <Link href={`/app/job/${entry.id}`} className="story-button story-button-outline story-button-small w-full sm:w-auto">
+        <Link href={`/app/job/${entry.id}`} className="story-button story-button-outline story-button-small w-full">
           Open
         </Link>
       )}
@@ -69,15 +69,27 @@ function Row({ entry, live }) {
 
 const NOTE = 'Transcripts (.txt, .srt, .vtt). Audio needs a local GPU.'
 
+function Stat({ icon, value, label }) {
+  return (
+    <div>
+      <svg aria-hidden viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        {icon}
+      </svg>
+      <dd>{value}</dd>
+      <dt>{label}</dt>
+    </div>
+  )
+}
+
 function StartButton({ large = false }) {
   return (
     <Link href="/app/new" className={`story-button story-button-coral ${large ? '!min-h-[60px] px-8 text-lg' : 'story-button-small'}`}>
-      Start your own lecture
+      <span aria-hidden="true">+</span> Start your own lecture
     </Link>
   )
 }
 
-export default function LibraryView() {
+export default function LibraryView({ photo = false }) {
   const stored = useRecentJobs() // null until mounted
   const recent = stored || []
   const [live, setLive] = useState({}) // id -> { state: 'live' | 'expired' | 'offline', status }
@@ -105,39 +117,56 @@ export default function LibraryView() {
 
   return (
     <div className="flex flex-col">
-      <div>
-        <p className="handwritten">your lectures</p>
-        <h2 className="sr-only">Library</h2>
+      <div className="lib-head">
+        <p className="handwritten lib-label">your lectures</p>
+        <Link href="/app/how" className="story-link">
+          How it works <span aria-hidden="true">↗</span>
+        </Link>
       </div>
+      <h2 className="sr-only">Library</h2>
 
-      <section className="lib-hero" aria-labelledby="hero-heading">
-        <p className="lib-hero-eyebrow">Your lecture. Notes you can check.</p>
+      <section className="lib-hero" style={photo ? { '--hero-photo': 'url(/hero-library.jpg)' } : undefined} aria-labelledby="hero-heading">
+        <p className="lib-hero-eyebrow">Your lectures. With receipts.</p>
         <h3 id="hero-heading" className="lib-hero-title">
-          Your next lecture, <em>line by line.</em>
+          Your next lecture,
+          <br />
+          <em>with receipts.</em>
         </h3>
-        <p className="lib-hero-lede">Upload a transcript. Every note comes back tied to a timestamp or a link, so you can check it.</p>
+        <p className="lib-hero-lede">Turn a lecture transcript into notes and slides where every line cites a timestamp or a link.</p>
         <div className="lib-hero-actions">
           <StartButton large />
           <Link href="/app/job/example-strang" className="lib-hero-link">
             See the example <span aria-hidden="true">→</span>
           </Link>
         </div>
-        <p className="lib-hero-note">{NOTE}</p>
+        <p className="lib-hero-note">
+          <span aria-hidden="true" />
+          No account needed. Your list stays in this browser.
+        </p>
       </section>
 
       <dl className="lib-stats" aria-label="Your library in numbers">
-        <div>
-          <dd>{EXAMPLES.length + recent.length}</dd>
-          <dt>Lectures in your library</dt>
-        </div>
-        <div>
-          <dd>{EXAMPLES.length + recent.filter((entry) => (live[entry.id]?.status || entry.status) === 'done').length}</dd>
-          <dt>Finished</dt>
-        </div>
-        <div>
-          <dd>{recent.filter((entry) => ['running', 'queued'].includes(live[entry.id]?.status || entry.status)).length}</dd>
-          <dt>Being processed</dt>
-        </div>
+        <Stat icon={<path d="M4 5v14M9 5v14M14 6l4 13M4 19h5" />} value={EXAMPLES.length} label="Examples ready" />
+        <Stat
+          icon={
+            <>
+              <rect x="4" y="5" width="16" height="12" rx="2" />
+              <path d="M9 21h6M12 17v4" />
+            </>
+          }
+          value={recent.length}
+          label="In this browser"
+        />
+        <Stat
+          icon={
+            <>
+              <circle cx="12" cy="12" r="9" />
+              <path d="M8 12.5l3 3 5-6" />
+            </>
+          }
+          value={recent.filter((entry) => entry.status === 'done').length}
+          label="Finished"
+        />
       </dl>
 
       <section className="lib-section" aria-labelledby="examples-heading">
@@ -145,7 +174,7 @@ export default function LibraryView() {
           Examples (pre-generated)
         </h3>
         <p className="mt-1 text-muted-foreground">Always available. They open without the server and were written before you came.</p>
-        <ul className="lib-list">
+        <ul className="lib-grid">
           {EXAMPLES.map((example) => (
             <Example key={example.id} example={example} />
           ))}
@@ -155,7 +184,7 @@ export default function LibraryView() {
       <section className="lib-section" aria-labelledby="recent-heading">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h3 id="recent-heading" className="text-2xl">
-            Recent lectures in this browser
+            Your lectures in this browser
           </h3>
           <button type="button" onClick={clearRecent} disabled={recent.length === 0} className="story-button story-button-outline story-button-small">
             Clear list
@@ -169,10 +198,11 @@ export default function LibraryView() {
           <div className="story-panel mt-5 flex flex-col items-start gap-4 !p-6">
             <p>Nothing here yet. Lectures you start on this device show up in this list (the last 20).</p>
             <StartButton />
+            <p className="text-sm text-muted-foreground">{NOTE}</p>
           </div>
         ) : (
           <>
-            <ul className="lib-list">
+            <ul className="lib-grid">
               {recent.map((entry) => (
                 <Row key={entry.id} entry={entry} live={live[entry.id]} />
               ))}
