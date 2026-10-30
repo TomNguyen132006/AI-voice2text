@@ -67,6 +67,16 @@ function Row({ entry, live }) {
   )
 }
 
+const NOTE = 'Transcripts (.txt, .srt, .vtt). Audio needs a local GPU.'
+
+function StartButton() {
+  return (
+    <Link href="/app/new" className="story-button story-button-coral story-button-small">
+      Start your own lecture
+    </Link>
+  )
+}
+
 export default function LibraryView() {
   const stored = useRecentJobs() // null until mounted
   const recent = stored || []
@@ -95,9 +105,17 @@ export default function LibraryView() {
 
   return (
     <div className="flex flex-col">
-      <div>
-        <p className="handwritten">your lectures</p>
-        <h2 className="text-4xl leading-tight">Library</h2>
+      <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
+        <div>
+          <p className="handwritten">your lectures</p>
+          <h2 className="text-4xl leading-tight">Library</h2>
+        </div>
+        {recent.length > 0 && (
+          <div className="flex flex-col items-start gap-1 sm:items-end">
+            <StartButton />
+            <p className="text-sm text-muted-foreground">{NOTE}</p>
+          </div>
+        )}
       </div>
 
       <section className="lib-section" aria-labelledby="examples-heading">
@@ -128,9 +146,8 @@ export default function LibraryView() {
         ) : recent.length === 0 ? (
           <div className="story-panel mt-5 flex flex-col items-start gap-4 !p-6">
             <p>Nothing here yet. Lectures you start on this device show up in this list (the last 20).</p>
-            <Link href="/app/new" className="story-button story-button-coral story-button-small">
-              New lecture
-            </Link>
+            <StartButton />
+            <p className="text-sm text-muted-foreground">{NOTE}</p>
           </div>
         ) : (
           <>

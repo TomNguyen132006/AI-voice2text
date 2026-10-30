@@ -10,7 +10,7 @@ function Arrow() {
   )
 }
 
-// The start page. Nothing is uploaded here: the upload lives at /app/new, a job at /app/job/[id].
+// The start page. Nothing is uploaded here: the upload lives at /app/new (reached from the Library), a job at /app/job/[id].
 export default function LectureApp() {
   return (
     <main id="story-main" tabIndex={-1}>
@@ -38,7 +38,7 @@ export default function LectureApp() {
                   Start
                 </h2>
               </div>
-              <Link href="/app/new" className="story-button story-button-coral w-full !min-h-[60px] text-lg">
+              <Link href="/app/library" className="story-button story-button-coral w-full !min-h-[60px] text-lg">
                 Start your own lecture
                 <Arrow />
               </Link>
