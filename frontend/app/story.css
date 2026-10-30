@@ -499,22 +499,16 @@
   }
 }
 
-/* "Open the app" in the nav: on a narrow phone the text link makes room for it */
+/* Phone: "How it works" is on the page itself, so the nav keeps room for "Library" and the theme toggle */
 @media (max-width: 560px) {
+  .story-nav,
   .story-nav nav {
-    gap: 10px;
-  }
-  .story-nav nav > a:not(.story-button) {
-    display: none;
-  }
-  .story-nav {
-    gap: 10px;
+    gap: 12px;
   }
   .story-nav .story-logo {
     font-size: 24px;
   }
-  .nav-open {
-    white-space: nowrap;
-    padding-inline: 16px;
+  .nav-how {
+    display: none;
   }
 }

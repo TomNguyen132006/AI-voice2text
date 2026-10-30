@@ -6,6 +6,7 @@ import { describeError, describeJobFailure, getJob } from '../lib/api'
 import { findExample } from '../lib/examples'
 import { useAfter } from '../lib/hooks'
 import { jobReducer } from '../lib/jobReducer'
+import { isLocalHost, LOCAL_DIR } from '../lib/localCopy'
 import { updateRecent } from '../lib/recent'
 import ErrorNotice from './ErrorNotice'
 import ProgressView from './ProgressView'
@@ -56,6 +57,49 @@ function ExampleJob({ example }) {
   }
   if (!job) return <Loading />
   return <ResultsView job={job} example={example} onReset={() => router.push('/app/new')} />
+}
+
+// A private copy of a course, on this computer only: static files from the git-ignored /local-only/ folder, no backend call.
+// Anywhere else (the deployed site, another computer) the file is missing and this is the normal "not found" screen.
+const LOCAL_COURSE_ID = 'local-course'
+
+function LocalCourseJob() {
+  const router = useRouter()
+  const [state, setState] = useState({ job: null, local: null, failed: false })
+  useEffect(() => {
+    let cancelled = false
+    const fail = () => !cancelled && setState({ job: null, local: null, failed: true })
+    if (!isLocalHost()) {
+      fail()
+      return () => {
+        cancelled = true
+      }
+    }
+    Promise.all([fetch(`${LOCAL_DIR}course.json`, { cache: 'no-store' }), fetch(`${LOCAL_DIR}manifest.json`, { cache: 'no-store' })])
+      .then(async ([course, manifest]) => {
+        if (!course.ok || !manifest.ok) return fail()
+        const [job, info] = await Promise.all([course.json(), manifest.json()])
+        const plain = (name) => typeof name === 'string' && /^[\w.-]+$/.test(name)
+        if (!Array.isArray(job?.statements) || !Array.isArray(job?.sections) || !job.summary || !plain(info?.deck) || !plain(info?.notes)) return fail()
+        if (!cancelled) setState({ job, local: { deck: info.deck, notes: info.notes }, failed: false })
+      })
+      .catch(fail)
+    return () => {
+      cancelled = true
+    }
+  }, [])
+  if (state.failed) {
+    return (
+      <ErrorNotice
+        {...describeError({ status: 404 })}
+        message="There is no lecture with this address."
+        onSecondary={() => router.replace('/app/library')}
+        secondaryLabel="Back to library"
+      />
+    )
+  }
+  if (!state.job) return <Loading />
+  return <ResultsView job={state.job} local={state.local} onReset={() => router.push('/app/new')} />
 }
 
 // A live job: ask the server every 2 s until it is done or failed. A 404 (the server restarted) is a message with a way out.
@@ -145,5 +189,6 @@ function LiveJob({ id }) {
 export default function JobView() {
   const { id } = useParams()
   const example = findExample(id)
+  if (id === LOCAL_COURSE_ID) return <LocalCourseJob />
   return example ? <ExampleJob example={example} /> : <LiveJob id={decodeURIComponent(id)} />
 }
