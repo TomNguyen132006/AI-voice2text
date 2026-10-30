@@ -148,7 +148,7 @@ export default function LibraryView({ photo = false }) {
       <section className="lib-section" aria-labelledby="recent-heading">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h3 id="recent-heading" className="text-2xl">
-            Your lectures in this browser
+            Your lectures
           </h3>
           <button type="button" onClick={clearRecent} disabled={recent.length === 0} className="story-button story-button-outline story-button-small">
             Clear list
