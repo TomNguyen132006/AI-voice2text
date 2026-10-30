@@ -69,18 +69,6 @@ function Row({ entry, live }) {
 
 const NOTE = 'Transcripts (.txt, .srt, .vtt). Audio needs a local GPU.'
 
-function Stat({ icon, value, label }) {
-  return (
-    <div>
-      <svg aria-hidden viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-        {icon}
-      </svg>
-      <dd>{value}</dd>
-      <dt>{label}</dt>
-    </div>
-  )
-}
-
 function StartButton({ large = false }) {
   return (
     <Link href="/app/new" className={`story-button story-button-coral ${large ? '!min-h-[60px] px-8 text-lg' : 'story-button-small'}`}>
@@ -144,30 +132,6 @@ export default function LibraryView({ photo = false }) {
           No account needed. Your list stays in this browser.
         </p>
       </section>
-
-      <dl className="lib-stats" aria-label="Your library in numbers">
-        <Stat icon={<path d="M4 5v14M9 5v14M14 6l4 13M4 19h5" />} value={EXAMPLES.length} label="Examples ready" />
-        <Stat
-          icon={
-            <>
-              <rect x="4" y="5" width="16" height="12" rx="2" />
-              <path d="M9 21h6M12 17v4" />
-            </>
-          }
-          value={recent.length}
-          label="In this browser"
-        />
-        <Stat
-          icon={
-            <>
-              <circle cx="12" cy="12" r="9" />
-              <path d="M8 12.5l3 3 5-6" />
-            </>
-          }
-          value={recent.filter((entry) => entry.status === 'done').length}
-          label="Finished"
-        />
-      </dl>
 
       <section className="lib-section" aria-labelledby="examples-heading">
         <h3 id="examples-heading" className="text-2xl">
