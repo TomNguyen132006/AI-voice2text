@@ -221,3 +221,103 @@
     display: none;
   }
 }
+
+/* Library hero and numbers */
+.lib-hero {
+  margin-top: 20px;
+  padding: 48px 48px 40px;
+  border-radius: 40px;
+  color: #fbf6ee;
+  background:
+    linear-gradient(90deg, rgb(20 35 28 / 0.96) 0%, rgb(20 35 28 / 0.88) 45%, rgb(20 35 28 / 0.35) 100%),
+    url('/hero-library.jpg') center / cover,
+    radial-gradient(circle at 85% 20%, #b9803f 0%, #4a3a26 35%, #14231c 75%);
+  background-color: #14231c;
+  overflow: hidden;
+}
+.lib-hero-eyebrow {
+  font-family: var(--font-story-label), ui-monospace, monospace;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.lib-hero-title {
+  margin-top: 14px;
+  max-width: 14ch;
+  color: #fbf6ee;
+  font-family: var(--font-story-heading), Georgia, serif;
+  font-size: clamp(44px, 7vw, 76px);
+  line-height: 0.98;
+  letter-spacing: -0.02em;
+}
+.lib-hero-title em {
+  color: #e8c58a;
+  font-style: italic;
+}
+.lib-hero-lede {
+  margin-top: 18px;
+  max-width: 34rem;
+  font-size: 19px;
+  line-height: 1.5;
+}
+.lib-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px 28px;
+  margin-top: 28px;
+}
+.lib-hero-link {
+  font-weight: 600;
+  color: #fbf6ee;
+}
+.lib-hero-link:hover {
+  text-decoration: underline;
+}
+.lib-hero-note {
+  margin-top: 16px;
+  font-size: 14px;
+  color: rgb(251 246 238 / 0.8);
+}
+.lib-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  margin-top: 24px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 32px;
+}
+.lib-stats > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 22px 26px;
+}
+.lib-stats > div + div {
+  border-left: 1px solid var(--border);
+}
+.lib-stats dd {
+  font-family: var(--font-story-heading), Georgia, serif;
+  font-size: 44px;
+  line-height: 1;
+}
+.lib-stats dt {
+  font-size: 16px;
+  color: var(--muted-foreground);
+}
+@media (max-width: 639px) {
+  .lib-hero {
+    padding: 32px 24px 28px;
+    border-radius: 28px;
+  }
+  .lib-stats > div {
+    padding: 16px 14px;
+  }
+  .lib-stats dd {
+    font-size: 32px;
+  }
+  .lib-stats dt {
+    font-size: 14px;
+  }
+}

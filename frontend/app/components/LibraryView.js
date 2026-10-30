@@ -69,9 +69,9 @@ function Row({ entry, live }) {
 
 const NOTE = 'Transcripts (.txt, .srt, .vtt). Audio needs a local GPU.'
 
-function StartButton() {
+function StartButton({ large = false }) {
   return (
-    <Link href="/app/new" className="story-button story-button-coral story-button-small">
+    <Link href="/app/new" className={`story-button story-button-coral ${large ? '!min-h-[60px] px-8 text-lg' : 'story-button-small'}`}>
       Start your own lecture
     </Link>
   )
@@ -105,18 +105,40 @@ export default function LibraryView() {
 
   return (
     <div className="flex flex-col">
-      <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
-        <div>
-          <p className="handwritten">your lectures</p>
-          <h2 className="text-4xl leading-tight">Library</h2>
-        </div>
-        {recent.length > 0 && (
-          <div className="flex flex-col items-start gap-1 sm:items-end">
-            <StartButton />
-            <p className="text-sm text-muted-foreground">{NOTE}</p>
-          </div>
-        )}
+      <div>
+        <p className="handwritten">your lectures</p>
+        <h2 className="sr-only">Library</h2>
       </div>
+
+      <section className="lib-hero" aria-labelledby="hero-heading">
+        <p className="lib-hero-eyebrow">Your lecture. Notes you can check.</p>
+        <h3 id="hero-heading" className="lib-hero-title">
+          Your next lecture, <em>line by line.</em>
+        </h3>
+        <p className="lib-hero-lede">Upload a transcript. Every note comes back tied to a timestamp or a link, so you can check it.</p>
+        <div className="lib-hero-actions">
+          <StartButton large />
+          <Link href="/app/job/example-strang" className="lib-hero-link">
+            See the example <span aria-hidden="true">→</span>
+          </Link>
+        </div>
+        <p className="lib-hero-note">{NOTE}</p>
+      </section>
+
+      <dl className="lib-stats" aria-label="Your library in numbers">
+        <div>
+          <dd>{EXAMPLES.length + recent.length}</dd>
+          <dt>Lectures in your library</dt>
+        </div>
+        <div>
+          <dd>{EXAMPLES.length + recent.filter((entry) => (live[entry.id]?.status || entry.status) === 'done').length}</dd>
+          <dt>Finished</dt>
+        </div>
+        <div>
+          <dd>{recent.filter((entry) => ['running', 'queued'].includes(live[entry.id]?.status || entry.status)).length}</dd>
+          <dt>Being processed</dt>
+        </div>
+      </dl>
 
       <section className="lib-section" aria-labelledby="examples-heading">
         <h3 id="examples-heading" className="text-2xl">
@@ -147,7 +169,6 @@ export default function LibraryView() {
           <div className="story-panel mt-5 flex flex-col items-start gap-4 !p-6">
             <p>Nothing here yet. Lectures you start on this device show up in this list (the last 20).</p>
             <StartButton />
-            <p className="text-sm text-muted-foreground">{NOTE}</p>
           </div>
         ) : (
           <>
