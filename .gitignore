@@ -44,3 +44,6 @@ nemo_experiments/
 
 # The one public example clip (MIT OpenCourseWare excerpt) ships with the site; every other audio file stays ignored
 !frontend/public/examples/**/*.mp3
+
+# Private local copies of class materials: never commit, never deploy
+frontend/public/local-only/

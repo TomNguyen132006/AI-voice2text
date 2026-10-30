@@ -67,6 +67,72 @@ function Row({ entry, live }) {
   )
 }
 
+// A private deck on THIS machine only: frontend/public/local-only/ is git-ignored, so the files and manifest.json never reach the repo
+// or the deployed site. The page asks for the manifest only on a local address; if it is missing or not valid, nothing is shown.
+const LOCAL_MANIFEST = '/local-only/manifest.json'
+const isLocalHost = () => ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname)
+const fileName = (value) => typeof value === 'string' && /^[\w.-]+$/.test(value)
+const count = (value) => typeof value === 'number' && Number.isFinite(value) && value >= 0
+
+function readLocalCopy(data) {
+  const ok = data && typeof data.title === 'string' && fileName(data.deck) && fileName(data.notes) && [data.lectures, data.minutes, data.sections, data.statements, data.sourceChecked, data.notJudged].every(count)
+  return ok ? data : null
+}
+
+function useLocalCopy() {
+  const [copy, setCopy] = useState(null)
+  useEffect(() => {
+    if (!isLocalHost()) return
+    let cancelled = false
+    fetch(LOCAL_MANIFEST, { cache: 'no-store' })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!cancelled) setCopy(readLocalCopy(data))
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
+  return copy
+}
+
+// The chip says only what the numbers say: a deck with some statements not judged is never called source-checked as a whole.
+function judgedChip({ sourceChecked, notJudged }) {
+  if (notJudged === 0) return 'Source-checked'
+  if (sourceChecked === 0) return 'Not judged'
+  return `Mixed: ${sourceChecked} source-checked, ${notJudged} not judged`
+}
+
+function LocalCopy({ copy }) {
+  const files = '/local-only/'
+  return (
+    <ul className="lib-grid">
+      <li className="lib-row">
+        <div className="lib-row-main">
+          <div className="badges">
+            <span className="badge badge-sticker">Local copy</span>
+            <span className="badge badge-peach">{judgedChip(copy)}</span>
+          </div>
+          <h4 className="lib-row-title">{copy.title}</h4>
+          <p className="lib-meta">
+            {[copy.date, `${copy.lectures} lectures`, `${copy.minutes} minutes`, `${copy.sections} sections`, `${copy.statements} statements`].filter(Boolean).join(' · ')}
+          </p>
+          <p className="lib-meta">Only on this computer. It is not uploaded and not part of the site.</p>
+        </div>
+        <div className="flex flex-wrap gap-3">
+          <a href={files + copy.deck} download className="story-button story-button-forest story-button-small">
+            Download deck (.pptx)
+          </a>
+          <a href={files + copy.notes} download className="story-button story-button-outline story-button-small">
+            Download notes (.md)
+          </a>
+        </div>
+      </li>
+    </ul>
+  )
+}
+
 const NOTE = 'Transcripts (.txt, .srt, .vtt). Audio needs a local GPU.'
 
 function StartButton({ large = false }) {
@@ -79,6 +145,7 @@ function StartButton({ large = false }) {
 
 export default function LibraryView({ photo = false }) {
   const stored = useRecentJobs() // null until mounted
+  const localCopy = useLocalCopy()
   const recent = stored || []
   const [live, setLive] = useState({}) // id -> { state: 'live' | 'expired' | 'offline', status }
   const ids = JSON.stringify(recent.map((entry) => entry.id)) // a stable key: the effect runs again only when the set of ids changes
@@ -154,6 +221,7 @@ export default function LibraryView({ photo = false }) {
             Clear list
           </button>
         </div>
+        {localCopy && <LocalCopy copy={localCopy} />}
         {stored === null ? (
           <p role="status" className="mt-5 text-muted-foreground">
             Loading your list…
