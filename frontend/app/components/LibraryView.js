@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { getJob } from '../lib/api'
 import { EXAMPLES } from '../lib/examples'
+import { isLocalHost, LOCAL_DIR } from '../lib/localCopy'
 import { clearRecent, updateRecent, useRecentJobs } from '../lib/recent'
 
 const date = (ms) => (ms ? new Date(ms).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '')
@@ -69,8 +70,7 @@ function Row({ entry, live }) {
 
 // A private deck on THIS machine only: frontend/public/local-only/ is git-ignored, so the files and manifest.json never reach the repo
 // or the deployed site. The page asks for the manifest only on a local address; if it is missing or not valid, nothing is shown.
-const LOCAL_MANIFEST = '/local-only/manifest.json'
-const isLocalHost = () => ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname)
+const LOCAL_MANIFEST = `${LOCAL_DIR}manifest.json`
 const fileName = (value) => typeof value === 'string' && /^[\w.-]+$/.test(value)
 const count = (value) => typeof value === 'number' && Number.isFinite(value) && value >= 0
 
@@ -105,7 +105,6 @@ function judgedChip({ sourceChecked, notJudged }) {
 }
 
 function LocalCopy({ copy }) {
-  const files = '/local-only/'
   return (
     <ul className="lib-grid">
       <li className="lib-row">
@@ -121,10 +120,13 @@ function LocalCopy({ copy }) {
           <p className="lib-meta">Only on this computer. It is not uploaded and not part of the site.</p>
         </div>
         <div className="flex flex-wrap gap-3">
-          <a href={files + copy.deck} download className="story-button story-button-forest story-button-small">
+          <Link href="/app/job/local-course" className="story-button story-button-forest story-button-small">
+            Open
+          </Link>
+          <a href={LOCAL_DIR + copy.deck} download className="story-button story-button-outline story-button-small">
             Download deck (.pptx)
           </a>
-          <a href={files + copy.notes} download className="story-button story-button-outline story-button-small">
+          <a href={LOCAL_DIR + copy.notes} download className="story-button story-button-outline story-button-small">
             Download notes (.md)
           </a>
         </div>

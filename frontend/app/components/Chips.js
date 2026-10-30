@@ -35,15 +35,15 @@ export function LectureChip({ source, onSeek }) {
           if (onSeek) onSeek(source.start)
         }}
         aria-expanded={open}
-        aria-label={onSeek ? `Play the lecture audio from ${clock(source.start)}, and show details` : `Lecture at ${clock(source.start)}, show details`}
+        aria-label={onSeek ? `Play the lecture audio from ${clock(source.start)}, and show details` : `${source.label ? `Lecture ${source.label.slice(1)} at` : 'Lecture at'} ${clock(source.start)}, show details`}
         className={`${chip} cursor-pointer bg-accent text-accent-foreground hover:brightness-95`}
       >
         <ClockIcon />
-        <span className="tabular-nums">{clock(source.start)}</span>
+        <span className="tabular-nums">{source.label ? `${source.label} · ` : ''}{clock(source.start)}</span>
       </button>
       {open && (
         <span className="text-sm text-muted-foreground">
-          Said between {clock(source.start)} and {clock(source.end)} ({source.segment_id})
+          Said {source.label ? `in lecture ${source.label.slice(1)} ` : ''}between {clock(source.start)} and {clock(source.end)} ({source.segment_id})
         </span>
       )}
     </span>

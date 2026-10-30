@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { clock, duration, fileUrl, getStats, zipUrl } from '../lib/api'
+import { LOCAL_DIR } from '../lib/localCopy'
 import { JudgeBadge, LectureChip, WebChip } from './Chips'
 import StatsPanel from './StatsPanel'
 
@@ -28,8 +29,40 @@ function Figure({ value, label }) {
   )
 }
 
+// The per-note status written in the file of a private local copy (each note keeps its own: light notes are never "source-checked").
+const KIND_OF_STATUS = { 'source-checked': 'checked', rewritten: 'rewritten', 'not judged': 'unjudged' }
+
+// A private course: the numbers are counted from the notes themselves.
+function LocalSummary({ job, sectionCount }) {
+  const { statements, summary } = job
+  const count = (kind) => statements.filter((s) => KIND_OF_STATUS[s.status] === kind).length
+  const rewritten = count('rewritten')
+  const checked = count('checked') + rewritten // a rewritten note passed the second check
+  const notJudged = statements.length - checked
+  return (
+    <div className="flex flex-col gap-3">
+      <dl className="story-panel grid grid-cols-2 gap-x-4 gap-y-5 !p-5 sm:grid-cols-3">
+        <Figure value={summary.lectures} label="lectures" />
+        <Figure value={sectionCount} label="sections" />
+        <Figure value={statements.length} label="notes" />
+        <Figure value={checked} label="source-checked" />
+        <Figure value={rewritten} label="of those rewritten" />
+        <Figure value={notJudged} label="not judged" />
+      </dl>
+      <p className="font-semibold">
+        Mixed: {checked} source-checked, {notJudged} not judged
+      </p>
+      <p className="text-muted-foreground">Only some lectures went through the judge. Each note below shows its own status.</p>
+      <p className="text-sm text-muted-foreground">
+        <strong className="text-foreground">Source-checked</strong> means the cited source supports the note. It does not check that the source itself is true.
+      </p>
+    </div>
+  )
+}
+
 function Summary({ job, sectionCount }) {
   const { summary, statements } = job
+  if (summary.local) return <LocalSummary job={job} sectionCount={sectionCount} />
   if (summary.sample) {
     return (
       <div className="flex flex-col gap-3">
@@ -110,10 +143,11 @@ function LecturePlayer({ audioRef, src, credit }) {
 }
 
 // example: a pre-generated example (frontend/public/examples), opened without the backend: static files, no stats request.
-export default function ResultsView({ job, onReset, example }) {
-  const [stats, setStats] = useState(example ? null : undefined) // undefined: loading, null: none
+// local: a private copy on this computer { deck, notes } (file names in /local-only/): static files, no stats request, own downloads.
+export default function ResultsView({ job, onReset, example, local }) {
+  const [stats, setStats] = useState(example || local ? null : undefined) // undefined: loading, null: none
   useEffect(() => {
-    if (example) return
+    if (example || local) return
     let cancelled = false
     getStats(job.id)
       .then((value) => !cancelled && setStats(value))
@@ -121,7 +155,7 @@ export default function ResultsView({ job, onReset, example }) {
     return () => {
       cancelled = true
     }
-  }, [job.id, example])
+  }, [job.id, example, local])
 
   // A lecture chip on an example plays the audio from its time. The file may not be loaded yet (preload="none"): load it first.
   const audio = useRef(null)
@@ -139,7 +173,10 @@ export default function ResultsView({ job, onReset, example }) {
     }
   }, [])
 
-  const kinds = useMemo(() => judgeKinds(stats, job.statements), [stats, job.statements])
+  const kinds = useMemo(
+    () => (local ? Object.fromEntries(job.statements.map((s) => [s.id, KIND_OF_STATUS[s.status] || 'unjudged'])) : judgeKinds(stats, job.statements)),
+    [local, stats, job.statements],
+  )
   const groups = (job.sections.length ? job.sections : [{ id: 'all', title: 'Notes', start: 0, end: 0 }])
     .map((section) => ({ section, notes: job.sections.length ? job.statements.filter((s) => s.section_id === section.id) : job.statements }))
     .filter((group) => group.notes.length > 0)
@@ -163,23 +200,41 @@ export default function ResultsView({ job, onReset, example }) {
             <p className="font-semibold">This is a pre-generated example, not a live run.</p>
           </div>
         )}
+        {local && (
+          <div role="note" className="flex flex-col gap-1 rounded-2xl bg-accent px-4 py-3 text-accent-foreground">
+            <p className="font-semibold">Private local copy. Only on this computer. Not uploaded, not part of the site.</p>
+          </div>
+        )}
         {example && <LecturePlayer audioRef={audio} src={`${example.files}/lecture.mp3`} credit={example.credit} />}
         <Summary job={job} sectionCount={groups.length} />
         <div>
           <h3 className="sr-only">Downloads</h3>
-          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-            <a
-              href={example ? `${example.files}/all.zip` : zipUrl(job.id)}
-              download={example ? 'lecturesque-all.zip' : undefined}
-              className="story-button story-button-coral w-full sm:w-auto"
-            >
-              <DownloadIcon />
-              All files (.zip)
-            </a>
-            <DownloadButton label="Notes (.md)" path={job.outputs.md} example={Boolean(example)} filename="notes.md" />
-            <DownloadButton label="Slides (.pptx)" path={job.outputs.pptx} example={Boolean(example)} filename="slides.pptx" />
-            <DownloadButton label="Transcript (.txt)" path={job.outputs.txt} example={Boolean(example)} filename="transcript.txt" />
-          </div>
+          {local ? (
+            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+              <a href={`${LOCAL_DIR}${local.deck}`} download className="story-button story-button-coral w-full sm:w-auto">
+                <DownloadIcon />
+                Slides (.pptx)
+              </a>
+              <a href={`${LOCAL_DIR}${local.notes}`} download className="story-button story-button-outline w-full sm:w-auto">
+                <DownloadIcon />
+                Notes (.md)
+              </a>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+              <a
+                href={example ? `${example.files}/all.zip` : zipUrl(job.id)}
+                download={example ? 'lecturesque-all.zip' : undefined}
+                className="story-button story-button-coral w-full sm:w-auto"
+              >
+                <DownloadIcon />
+                All files (.zip)
+              </a>
+              <DownloadButton label="Notes (.md)" path={job.outputs.md} example={Boolean(example)} filename="notes.md" />
+              <DownloadButton label="Slides (.pptx)" path={job.outputs.pptx} example={Boolean(example)} filename="slides.pptx" />
+              <DownloadButton label="Transcript (.txt)" path={job.outputs.txt} example={Boolean(example)} filename="transcript.txt" />
+            </div>
+          )}
         </div>
       </section>
 
